@@ -241,7 +241,7 @@ function PantallaRegistro({ onRegistroExitoso, onVolver }) {
       </div>
     </div>
   );
-
+}
 // ─── MODAL NUEVO PACIENTE ──────────────────────────────────────────
 function ModalNuevoPaciente({ onClose, onSave, sucursalActual }) {
   const [form, setForm] = useState({
