@@ -611,7 +611,7 @@ function PantallaRegistro({ usuarios, onRegistroExitoso, onVolver }) {
 }
 
 // ─── MODAL NUEVO PACIENTE ──────────────────────────────────────────
-function ModalNuevoPaciente({ onClose, onSave, sucursalActual }) {
+function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [] }) {
   const [form, setForm] = useState({
     dni: "", nombre: "", apellidos: "", telefono: "",
     sucursal: sucursalActual,
@@ -625,30 +625,25 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual }) {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  const [pacienteExistente, setPacienteExistente] = useState(null);
+
   const buscarDni = async () => {
     if (form.dni.length !== 8) return setDniError("El DNI debe tener 8 dígitos");
-    setBuscandoDni(true); setDniError(""); setDniExito(false);
+    setBuscandoDni(true); setDniError(""); setDniExito(false); setPacienteExistente(null);
+    // Check if patient already exists
+    const existente = pacientes.find(p => p.dni === form.dni);
+    if (existente) { setPacienteExistente(existente); setBuscandoDni(false); return; }
     try {
-      const res = await fetch(`https://api.apis.net.pe/v2/reniec/dni?numero=${form.dni}`, {
-        headers: { Authorization: "Bearer apis-token-13017.GbHs7CwRCPnWtMIRqkl0oTieSWByK6Bz", Accept: "application/json" },
+      const res = await fetch(`https://decolecta.com/api/dni/${form.dni}`, {
+        headers: { Authorization: "Bearer sk_15186.wAW7WzHkhSqHTK6uIK46q1wIpVqAvtIV", Accept: "application/json" },
       });
       if (res.ok) {
         const data = await res.json();
-        if (data.nombres) {
-          set("nombre", data.nombres);
-          set("apellidos", `${data.apellidoPaterno || ""} ${data.apellidoMaterno || ""}`.trim());
-          setDniExito(true); setBuscandoDni(false); return;
-        }
-      }
-    } catch (_) {}
-    try {
-      const res2 = await fetch(`https://apiperu.dev/api/dni/${form.dni}`, { headers: { Accept: "application/json" } });
-      if (res2.ok) {
-        const data2 = await res2.json();
-        if (data2.data?.nombre_completo) {
-          const partes = data2.data.nombre_completo.split(" ");
-          set("apellidos", `${partes[0] || ""} ${partes[1] || ""}`.trim());
-          set("nombre", partes.slice(2).join(" "));
+        const nombres = data.nombres || data.nombre || "";
+        const apellidos = (`${data.apellidoPaterno || ""} ${data.apellidoMaterno || ""}`.trim()) || data.apellidos || "";
+        if (nombres) {
+          set("nombre", nombres);
+          set("apellidos", apellidos);
           setDniExito(true); setBuscandoDni(false); return;
         }
       }
@@ -675,8 +670,34 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual }) {
     onClose();
   };
 
+  const cargarPacienteExistente = () => {
+    if (!pacienteExistente) return;
+    const partes = pacienteExistente.nombre.split(" ");
+    set("nombre", partes.slice(0, Math.ceil(partes.length/2)).join(" "));
+    set("apellidos", partes.slice(Math.ceil(partes.length/2)).join(" "));
+    set("telefono", pacienteExistente.telefono || "");
+    setPacienteExistente(null);
+    setDniExito(true);
+  };
+
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      {pacienteExistente && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 28, maxWidth: 380, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+            <div style={{ fontSize: 32, textAlign: "center", marginBottom: 12 }}>👤</div>
+            <h3 style={{ margin: "0 0 8px", textAlign: "center", fontSize: 16, fontWeight: 800, color: "#111827" }}>Paciente Existente</h3>
+            <p style={{ margin: "0 0 16px", textAlign: "center", fontSize: 13, color: "#6B7280" }}>
+              El DNI <strong>{pacienteExistente.dni}</strong> ya está registrado como:<br/>
+              <strong style={{ color: "#111827" }}>{pacienteExistente.nombre}</strong>
+            </p>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setPacienteExistente(null)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1.5px solid #E5E7EB", background: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#6B7280" }}>Cancelar</button>
+              <button onClick={cargarPacienteExistente} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#059669", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#fff" }}>✅ Cargar Datos</button>
+            </div>
+          </div>
+        </div>
+      )}
       <Card style={{ width: "100%", maxWidth: 620, maxHeight: "92vh", overflowY: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#111827" }}>Nuevo Paciente</h2>
@@ -1611,7 +1632,7 @@ export default function OptiManager() {
         {vista === "reporte" && <Reporte pacientes={pacientes.filter(p => sucursalFiltro === "Todas" || p.sucursal === sucursalFiltro)} movimientos={movimientos} sucursalFiltro={sucursalFiltro} esJefe={esJefe} onAnularVenta={anularVenta} />}
       </div>
 
-      {modalNuevo && <ModalNuevoPaciente onClose={() => setModalNuevo(false)} onSave={addPaciente} sucursalActual={sedeActual} />}
+      {modalNuevo && <ModalNuevoPaciente onClose={() => setModalNuevo(false)} onSave={addPaciente} sucursalActual={sedeActual} pacientes={pacientes} />}
     </div>
   );
 }
