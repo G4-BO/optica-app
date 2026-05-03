@@ -97,7 +97,60 @@ const abrirWhatsApp = (paciente, mensaje = null) => {
   const tel = paciente.telefono.replace(/\D/g, "");
   window.open(`https://wa.me/51${tel}?text=${msg}`, "_blank");
 };
+// ─── EMAILJS ────────────────────────────────────────────────────────
+const enviarCodigoEmailJS = async (email, codigo, nombre) => {
+  const SERVICE_ID = "service_2a0y4qv";
+  const TEMPLATE_ID = "ajguq8z";
+  const PUBLIC_KEY = "7eQFw8xx2YpkMUULH";
+  try {
+    emailjs.init(PUBLIC_KEY);
+    await emailjs.send(SERVICE_ID, TEMPLATE_ID, {
+      to_email: email,
+      to_name: nombre,
+      verification_code: codigo,
+      message: `Tu código de verificación para OPTIMANAGER es: ${codigo}. Válido por 10 minutos.`,
+    });
+    return true;
+  } catch (error) {
+    console.error("EmailJS error:", error);
+    return false;
+  }
+};
 
+// ─── PANTALLA REGISTRO ──────────────────────────────────────────────
+function PantallaRegistro({ onRegistroExitoso, onVolver }) {
+  const [paso, setPaso] = useState(1);
+  const [form, setForm] = useState({ nombre: "", celular: "", email: "", username: "", password: "", confirmar: "", rol: "trabajador", claveJefe: "" });
+  const [codigoGenerado, setCodigoGenerado] = useState("");
+  const [codigoIngresado, setCodigoIngresado] = useState("");
+  const [error, setError] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  const enviarCodigo = async () => {
+    if (!form.nombre || !form.email || !form.username || !form.password) return setError("Completa todos los campos.");
+    if (form.password !== form.confirmar) return setError("Las contraseñas no coinciden.");
+    if (form.password.length < 6) return setError("La contraseña debe tener al menos 6 caracteres.");
+    if (form.rol === "jefe" && form.claveJefe !== MASTER_PASSWORD) return setError("Contraseña maestra incorrecta.");
+    setError(""); setEnviando(true);
+    const codigo = Math.floor(100000 + Math.random() * 900000).toString();
+    setCodigoGenerado(codigo);
+    try {
+      const ok = await enviarCodigoEmailJS(form.email, codigo, form.nombre);
+      if (ok) {
+        setPaso(2);
+      } else {
+        setError(`EmailJS no configurado. Código de prueba: ${codigo} (solo para desarrollo)`);
+        setCodigoGenerado(codigo);
+        setPaso(2);
+      }
+    } catch {
+      setError(`Código de verificación (modo offline): ${codigo}`);
+      setCodigoGenerado(codigo);
+      setPaso(2);
+    }
+    setEnviando(false);
+  };
   const verificarCodigo = () => {
     if (codigoIngresado !== codigoGenerado) { setError("Código incorrecto. Inténtalo de nuevo."); return; }
     onRegistroExitoso({
