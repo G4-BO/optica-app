@@ -164,7 +164,6 @@ function PantallaRegistro({ onRegistroExitoso, onVolver }) {
       verificado: true,
     });
   };
-};
   return (
     <div style={{
       minHeight: "100vh", background: "linear-gradient(135deg, #059669 0%, #065f46 100%)",
