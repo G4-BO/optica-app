@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import emailjs from '@emailjs/browser';
 
 // ─── SEDES ─────────────────────────────────────────────────────────
