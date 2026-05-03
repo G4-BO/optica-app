@@ -105,13 +105,14 @@ const enviarCodigoEmailJS = async (email, codigo, nombre) => {
   const TEMPLATE_ID = "ajguq8z";
   const PUBLIC_KEY = "7eQFw8xx2YpkMUULH";
 
-  try {
+ try {
+    emailjs.init(PUBLIC_KEY);
     await emailjs.send(SERVICE_ID, TEMPLATE_ID, {
       to_email: email,
       to_name: nombre,
       verification_code: codigo,
       message: `Tu código de verificación para OPTIMANAGER es: ${codigo}. Válido por 10 minutos.`,
-    }, PUBLIC_KEY);
+    });
     return true;
   } catch (error) {
     console.error("EmailJS error:", error);
