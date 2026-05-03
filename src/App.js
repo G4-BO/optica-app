@@ -102,7 +102,7 @@ const abrirWhatsApp = (paciente, mensaje = null) => {
 // ─── EMAILJS (verificación de cuenta) ─────────────────────────────
 const enviarCodigoEmailJS = async (email, codigo, nombre) => {
   const SERVICE_ID = "service_2a0y4qv";
-  const TEMPLATE_ID = "ajguq8z";
+  const TEMPLATE_ID = "template_w7szl9r";
   const PUBLIC_KEY = "7eQFw8xx2YpkMUULH";
   try {
     emailjs.init(PUBLIC_KEY);
