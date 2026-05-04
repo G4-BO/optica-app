@@ -1,5 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import emailjs from '@emailjs/browser';
+import { initializeApp } from "firebase/app";
+import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from "firebase/firestore";
+
+// ─── FIREBASE CONFIG ────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey: "AIzaSyAYZI76vPTa3vSVjdqFGkTyl_4hTjY2SoM",
+  authDomain: "optimanager-6c839.firebaseapp.com",
+  projectId: "optimanager-6c839",
+  storageBucket: "optimanager-6c839.firebasestorage.app",
+  messagingSenderId: "555610836819",
+  appId: "1:555610836819:web:2858bc53ba49a81d199ba6"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
 // ─── SEDES ─────────────────────────────────────────────────────────
 const SUCURSALES = ["Óptica La Huayrona", "Óptica El Muro"];
@@ -416,13 +430,30 @@ function PantallaLogin({ usuarios, onLogin, onIrRegistro }) {
   const [sede, setSede] = useState(SUCURSALES[0]);
   const [error, setError] = useState("");
 
-  const handleLogin = () => {
-    const u = usuarios.find(u => u.username === username && u.password === password && u.verificado);
-    if (!u) {
-      setError("Usuario o contraseña incorrectos, o cuenta no verificada.");
-      return;
-    }
-    onLogin(u, sede);
+  const handleLogin = async () => {
+    // Primero busca en la lista local (admin)
+    const uLocal = usuarios.find(u => u.username === username && u.password === password && u.verificado);
+    if (uLocal) { onLogin(uLocal, sede); return; }
+    // Luego busca en Firebase
+    try {
+      const { getFirestore, collection, getDocs } = await import("firebase/firestore");
+      const { initializeApp, getApps } = await import("firebase/app");
+      const firebaseConfig = {
+        apiKey: "AIzaSyAYZI76vPTa3vSVjdqFGkTyl_4hTjY2SoM",
+        authDomain: "optimanager-6c839.firebaseapp.com",
+        projectId: "optimanager-6c839",
+        storageBucket: "optimanager-6c839.firebasestorage.app",
+        messagingSenderId: "555610836819",
+        appId: "1:555610836819:web:2858bc53ba49a81d199ba6"
+      };
+      const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+      const snap = await getDocs(collection(db, "usuarios"));
+      const fbUsuarios = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      const uFb = fbUsuarios.find(u => u.username === username && u.password === password && u.verificado);
+      if (uFb) { onLogin(uFb, sede); return; }
+    } catch(e) { console.error(e); }
+    setError("Usuario o contraseña incorrectos, o cuenta no verificada.");
   };
 
   return (
@@ -1542,30 +1573,67 @@ function Reporte({ pacientes, movimientos, sucursalFiltro, esJefe, onAnularVenta
 
 // ─── APP PRINCIPAL ─────────────────────────────────────────────────
 export default function OptiManager() {
-  const [pantalla, setPantalla] = useState("login"); // login | registro | app
+  const [pantalla, setPantalla] = useState("login");
   const [usuarioActual, setUsuarioActual] = useState(null);
   const [sedeActual, setSedeActual] = useState(SUCURSALES[0]);
   const [usuarios, setUsuarios] = useState([
-    { id: 1, nombre: "Administrador", email: "admin@optica.com", celular: "999999999", username: "admin", password: "admin123", rol: "jefe", verificado: true },
+    { id: "admin", nombre: "Administrador", email: "admin@optica.com", celular: "999999999", username: "admin", password: "admin123", rol: "jefe", verificado: true },
   ]);
-
   const [vista, setVista] = useState("dashboard");
-  const [pacientes, setPacientes] = useState(initialPacientes);
+  const [pacientes, setPacientes] = useState([]);
   const [sucursalFiltro, setSucursalFiltro] = useState("Todas");
   const [modalNuevo, setModalNuevo] = useState(false);
   const [movimientos, setMovimientos] = useState([]);
+  const [cargando, setCargando] = useState(true);
 
   const esJefe = usuarioActual?.rol === "jefe";
 
+  // ─── CARGAR DATOS DESDE FIREBASE ───────────────────────────────────
+  useEffect(() => {
+    const unsubPacientes = onSnapshot(collection(db, "pacientes"), (snap) => {
+      setPacientes(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+    });
+    const unsubMovimientos = onSnapshot(collection(db, "movimientos"), (snap) => {
+      setMovimientos(snap.docs.map(d => ({ ...d.data(), id: d.id })));
+    });
+    const unsubUsuarios = onSnapshot(collection(db, "usuarios"), (snap) => {
+      const fbUsuarios = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+      if (fbUsuarios.length > 0) setUsuarios(prev => {
+        const adminDefault = prev.find(u => u.username === "admin");
+        return adminDefault ? [adminDefault, ...fbUsuarios] : fbUsuarios;
+      });
+    });
+    setCargando(false);
+    return () => { unsubPacientes(); unsubMovimientos(); unsubUsuarios(); };
+  }, []);
+
   const handleLogin = (usuario, sede) => { setUsuarioActual(usuario); setSedeActual(sede); setPantalla("app"); };
   const handleLogout = () => { setUsuarioActual(null); setPantalla("login"); setVista("dashboard"); };
-  const handleRegistro = (nuevoUsuario) => { setUsuarios(us => [...us, nuevoUsuario]); setPantalla("login"); alert("¡Cuenta creada exitosamente! Ya puedes iniciar sesión."); };
+  const handleRegistro = async (nuevoUsuario) => {
+    await addDoc(collection(db, "usuarios"), nuevoUsuario);
+    setPantalla("login");
+    alert("¡Cuenta creada exitosamente! Ya puedes iniciar sesión.");
+  };
 
-  const updatePaciente = (updated) => setPacientes(ps => ps.map(p => p.id === updated.id ? updated : p));
-  const addPaciente = (nuevo) => { setPacientes(ps => [nuevo, ...ps]); setVista("pacientes"); };
-  const eliminarPaciente = (id) => setPacientes(ps => ps.filter(p => p.id !== id));
-  const anularVenta = (id) => setPacientes(ps => ps.filter(p => p.id !== id));
-  const addMovimiento = (mov) => setMovimientos(ms => [{ ...mov, id: Date.now() }, ...ms]);
+  const updatePaciente = async (updated) => {
+    const { id, ...data } = updated;
+    await updateDoc(doc(db, "pacientes", id), data);
+  };
+  const addPaciente = async (nuevo) => {
+    await addDoc(collection(db, "pacientes"), nuevo);
+    setVista("pacientes");
+  };
+  const eliminarPaciente = async (id) => {
+    await deleteDoc(doc(db, "pacientes", id));
+  };
+  const anularVenta = async (id) => {
+    await deleteDoc(doc(db, "pacientes", id));
+  };
+  const addMovimiento = async (mov) => {
+    await addDoc(collection(db, "movimientos"), { ...mov, id: Date.now() });
+  };
+
+  if (cargando) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", fontSize: 18, color: "#059669" }}>⏳ Cargando OptiManager...</div>;
 
   if (pantalla === "login") return <PantallaLogin usuarios={usuarios} onLogin={handleLogin} onIrRegistro={() => setPantalla("registro")} />;
   if (pantalla === "registro") return <PantallaRegistro usuarios={usuarios} onRegistroExitoso={handleRegistro} onVolver={() => setPantalla("login")} />;
