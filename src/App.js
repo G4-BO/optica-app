@@ -631,7 +631,8 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [] })
     const existente = pacientes.find(p => p.dni === form.dni);
     if (existente) { setPacienteExistente(existente); setBuscandoDni(false); return; }
     try {
-      const res = await fetch(`https://decolecta.com/api/dni/${form.dni}`, {
+      // Intentar con Decolecta
+      const res = await fetch(`https://api.decolecta.com/v1/dni/${form.dni}`, {
         headers: { Authorization: "Bearer sk_15186.wAW7WzHkhSqHTK6uIK46q1wIpVqAvtIV", Accept: "application/json" },
       });
       if (res.ok) {
@@ -641,6 +642,20 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [] })
         if (nombres) {
           set("nombre", nombres);
           set("apellidos", apellidos);
+          setDniExito(true); setBuscandoDni(false); return;
+        }
+      }
+    } catch (_) {}
+    // Intentar con apis.net.pe como fallback
+    try {
+      const res2 = await fetch(`https://api.apis.net.pe/v2/reniec/dni?numero=${form.dni}`, {
+        headers: { Authorization: "Bearer apis-token-13017.GbHs7CwRCPnWtMIRqkl0oTieSWByK6Bz", Accept: "application/json" },
+      });
+      if (res2.ok) {
+        const data2 = await res2.json();
+        if (data2.nombres) {
+          set("nombre", data2.nombres);
+          set("apellidos", `${data2.apellidoPaterno || ""} ${data2.apellidoMaterno || ""}`.trim());
           setDniExito(true); setBuscandoDni(false); return;
         }
       }
