@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import emailjs from '@emailjs/browser';
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, getDocs, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from "firebase/firestore";
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from "firebase/firestore";
 
 // ─── FIREBASE CONFIG ────────────────────────────────────────────────
 const firebaseConfig = {
@@ -31,41 +31,7 @@ const TIPOS_TRATAMIENTO = ["Rx Blancas","Rx Antirreflex","Blue Protec","Fotomát
 const METODOS_PAGO = ["Efectivo", "Yape", "Plin", "POS", "Transferencia"];
 const MATERIALES_LUNA = ["Resinas", "Cristal", "Policarbonato", "Resinas NK"];
 
-const initialPacientes = [
-  {
-    id: 1, nombre: "María García", dni: "12345678", telefono: "987654321",
-    sucursal: "Óptica La Huayrona", fecha: "2025-04-20", fechaEntrega: "2025-04-27",
-    tipoLente: "Multifuncional", tratamiento: "Blue Protec", detalleTratamiento: "",
-    montura: "MON-001", observaciones: "",
-    total: 350, abonos: [{ monto: 150, fecha: "2025-04-20", nota: "Adelanto", metodo: "Efectivo" }],
-    estado: "EN_LABORATORIO",
-    graduacion: { odEsfera: "-2.00", odCilindro: "-0.50", odEje: "180", odAdicion: "", odDp: "32",
-                  oiEsfera: "-1.75", oiCilindro: "-0.25", oiEje: "175", oiAdicion: "", oiDp: "31" },
-  },
-  {
-    id: 2, nombre: "Carlos Mendoza", dni: "87654321", telefono: "912345678",
-    sucursal: "Óptica El Muro", fecha: "2024-07-10", fechaEntrega: "2024-07-17",
-    tipoLente: "Monofocal", tratamiento: "Rx Antirreflex", detalleTratamiento: "",
-    montura: "MON-042", observaciones: "",
-    total: 180, abonos: [{ monto: 100, fecha: "2024-07-10", nota: "Adelanto", metodo: "Yape" }],
-    estado: "RECOGIDO",
-    graduacion: { odEsfera: "-1.50", odCilindro: "0.00", odEje: "0", odAdicion: "", odDp: "33",
-                  oiEsfera: "-1.50", oiCilindro: "0.00", oiEje: "0", oiAdicion: "", oiDp: "32" },
-  },
-  {
-    id: 3, nombre: "Ana Torres", dni: "45678901", telefono: "976543210",
-    sucursal: "Óptica La Huayrona", fecha: "2025-04-22", fechaEntrega: "2025-04-30",
-    tipoLente: "Bifocal", tratamiento: "Digital", detalleTratamiento: "Digital HD Plus",
-    montura: "MON-117", observaciones: "Cliente prefiere armazón oscuro",
-    total: 520, abonos: [
-      { monto: 200, fecha: "2025-04-22", nota: "Adelanto", metodo: "POS" },
-      { monto: 50, fecha: "2025-04-23", nota: "Abono", metodo: "Efectivo" }
-    ],
-    estado: "PEDIDO",
-    graduacion: { odEsfera: "-3.25", odCilindro: "-0.75", odEje: "90", odAdicion: "+1.50", odDp: "34",
-                  oiEsfera: "-3.00", oiCilindro: "-0.50", oiEje: "85", oiAdicion: "+1.50", oiDp: "33" },
-  },
-];
+
 
 // ─── HELPERS ───────────────────────────────────────────────────────
 const totalAbonado = (p) => p.abonos.reduce((s, a) => s + a.monto, 0);
