@@ -534,9 +534,9 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [] })
       const res = await fetch(`/api/dni?numero=${form.dni}`);
       if (res.ok) {
         const data = await res.json();
-        if (data.nombres) {
-          set("nombre", data.nombres);
-          set("apellidos", `${data.apellidoPaterno || ""} ${data.apellidoMaterno || ""}`.trim());
+        if (data.first_name) {
+          set("nombre", data.first_name);
+          set("apellidos", `${data.first_last_name || ""} ${data.second_last_name || ""}`.trim());
           setDniExito(true); setBuscandoDni(false); return;
         }
       }
