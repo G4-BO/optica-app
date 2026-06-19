@@ -523,7 +523,13 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [] })
   const [dniExito, setDniExito] = useState(false);
   const [pacienteExistente, setPacienteExistente] = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-
+  const capitalizar = (texto) =>
+    texto
+      .toLowerCase()
+      .split(" ")
+      .filter(Boolean)
+      .map(palabra => palabra.charAt(0).toUpperCase() + palabra.slice(1))
+      .join(" ");
   // ✅ CORRECCIÓN: Usa proxy interno /api/dni para evitar CORS
   const buscarDni = async () => {
     if (form.dni.length !== 8) return setDniError("El DNI debe tener 8 dígitos");
@@ -534,9 +540,9 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [] })
       const res = await fetch(`/api/dni?numero=${form.dni}`);
       if (res.ok) {
         const data = await res.json();
-        if (data.first_name) {
-          set("nombre", data.first_name);
-          set("apellidos", `${data.first_last_name || ""} ${data.second_last_name || ""}`.trim());
+       if (data.first_name) {
+          set("nombre", capitalizar(data.first_name));
+          set("apellidos", capitalizar(`${data.first_last_name || ""} ${data.second_last_name || ""}`.trim()));
           setDniExito(true); setBuscandoDni(false); return;
         }
       }
@@ -596,8 +602,7 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [] })
             <div style={{ fontSize: 13, fontWeight: 700, color: "#0369A1", marginBottom: 10 }}>🪪 Datos del Paciente</div>
             <div style={{ display: "flex", gap: 10, alignItems: "flex-end", marginBottom: 10 }}>
               <div style={{ flex: 1 }}>
-                <Input label="DNI" value={form.dni} onChange={e => { set("dni", e.target.value); setDniError(""); setDniExito(false); }} placeholder="8 dígitos" maxLength={8} />
-              </div>
+<Input label="DNI" value={form.dni} onChange={e => { set("dni", e.target.value); setDniError(""); setDniExito(false); }} onKeyDown={e => { if (e.key === "Enter" && form.dni.length === 8 && !buscandoDni) buscarDni(); }} placeholder="8 dígitos" maxLength={8} />              </div>
               <Btn onClick={buscarDni} disabled={buscandoDni || form.dni.length !== 8} style={{ height: 40, whiteSpace: "nowrap" }}>
                 {buscandoDni ? "⏳..." : "🔍 Buscar DNI"}
               </Btn>
