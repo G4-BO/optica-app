@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import emailjs from '@emailjs/browser';
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot } from "firebase/firestore";
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, setDoc } from "firebase/firestore";
 
 // ─── FIREBASE CONFIG ────────────────────────────────────────────────
 const firebaseConfig = {
@@ -656,7 +656,7 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [] })
   );
 }
 
-function ModalDetalle({ paciente, onClose, onUpdate, onEliminar, esJefe }) {
+function ModalDetalle({ paciente, onClose, onUpdate, onEliminar, esJefe, datosOptica = {} }) {
   const [p, setP] = useState({ ...paciente, graduacion: paciente.graduacion || graduacionVacia() });
   const [nuevoAbono, setNuevoAbono] = useState("");
   const [notaAbono, setNotaAbono] = useState("Abono");
@@ -813,7 +813,13 @@ function ModalDetalle({ paciente, onClose, onUpdate, onEliminar, esJefe }) {
             </div>
           </>
         )}
-        {!modoEditar && <div style={{ display: "flex", justifyContent: "flex-end" }}><Btn variant="ghost" onClick={onClose}>Cerrar</Btn></div>}
+        {!modoEditar && <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn variant="ghost" onClick={() => imprimirRecibo(p, datosOptica)} style={{ fontSize: 12, padding: "7px 14px" }}>🖨 Recibo</Btn>
+            <Btn variant="ghost" onClick={() => imprimirMedida(p, datosOptica)} style={{ fontSize: 12, padding: "7px 14px" }}>📋 Medida</Btn>
+          </div>
+          <Btn variant="ghost" onClick={onClose}>Cerrar</Btn>
+        </div>}
       </Card>
     </div>
   );
@@ -873,7 +879,7 @@ function Dashboard({ pacientes }) {
   );
 }
 
-function Pacientes({ pacientes, onUpdate, onEliminar, sucursalFiltro, esJefe }) {
+function Pacientes({ pacientes, onUpdate, onEliminar, sucursalFiltro, esJefe, datosOptica = {} }) {
   const [buscar, setBuscar] = useState("");
   const [estadoFiltro, setEstadoFiltro] = useState("TODOS");
   const [detalle, setDetalle] = useState(null);
@@ -920,7 +926,7 @@ function Pacientes({ pacientes, onUpdate, onEliminar, sucursalFiltro, esJefe }) 
           );
         })}
       </div>
-      {detalle && <ModalDetalle paciente={detalle} onClose={() => setDetalle(null)} onUpdate={p => { onUpdate(p); setDetalle(p); }} onEliminar={onEliminar} esJefe={esJefe} />}
+      {detalle && <ModalDetalle paciente={detalle} onClose={() => setDetalle(null)} onUpdate={p => { onUpdate(p); setDetalle(p); }} onEliminar={onEliminar} esJefe={esJefe} datosOptica={datosOptica} />}
     </div>
   );
 }
@@ -956,7 +962,7 @@ function Cuentas({ pacientes, sucursalFiltro }) {
   );
 }
 
-function Directorio({ pacientes, onUpdate, onEliminar, esJefe }) {
+function Directorio({ pacientes, onUpdate, onEliminar, esJefe, datosOptica = {} }) {
   const [buscar, setBuscar] = useState("");
   const [detalle, setDetalle] = useState(null);
   const termino = buscar.trim().toLowerCase();
@@ -1001,7 +1007,7 @@ function Directorio({ pacientes, onUpdate, onEliminar, esJefe }) {
           );
         })}
       </div>
-      {detalle && <ModalDetalle paciente={detalle} onClose={() => setDetalle(null)} onUpdate={p => { onUpdate(p); setDetalle(p); }} onEliminar={onEliminar} esJefe={esJefe} />}
+      {detalle && <ModalDetalle paciente={detalle} onClose={() => setDetalle(null)} onUpdate={p => { onUpdate(p); setDetalle(p); }} onEliminar={onEliminar} esJefe={esJefe} datosOptica={datosOptica} />}
     </div>
   );
 }
@@ -1191,6 +1197,228 @@ function Reporte({ pacientes, movimientos, sucursalFiltro, esJefe, onAnularVenta
   );
 }
 
+// ─── FUNCIONES DE IMPRESIÓN ──────────────────────────────────────────
+const generarHTMLRecibo = (paciente, datosOptica = {}) => {
+  const saldo = saldoPendiente(paciente);
+  const abonado = totalAbonado(paciente);
+  const nombreOptica = datosOptica.nombre || "OPTIMANAGER";
+  const sucursalData = (datosOptica.sucursales || []).find(s => s.nombre === paciente.sucursal) || {};
+  const direccion = sucursalData.direccion || paciente.sucursal || "";
+  const telefono = sucursalData.telefono || "";
+  const recomendaciones = datosOptica.recomendaciones || [
+    "Una vez hecho el contrato no habrá anulación ni devolución del dinero.",
+    "Pasado los 30 días no habrá derecho a reclamo.",
+    "La garantía que brindamos es limpieza y nivelación de lentes. ¡Gracias!"
+  ];
+
+  const itemsHTML = [
+    paciente.tipoLente && `
+      <tr>
+        <td style="padding:4px 2px;vertical-align:top;">1</td>
+        <td style="padding:4px 2px;vertical-align:top;">
+          ${[paciente.tipoLente, paciente.tratamiento === "Digital" ? `Digital - ${paciente.detalleTratamiento}` : paciente.tratamiento, paciente.materialLuna && `Luna: ${paciente.materialLuna}`, paciente.montura && `Montura: ${paciente.montura}`].filter(Boolean).join(" / ")}
+        </td>
+        <td style="padding:4px 2px;text-align:right;vertical-align:top;">${Number(paciente.total).toFixed(2)}</td>
+        <td style="padding:4px 2px;text-align:right;vertical-align:top;">${Number(paciente.total).toFixed(2)}</td>
+      </tr>`
+  ].filter(Boolean).join("");
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+  body{font-family:'Courier New',monospace;font-size:12px;margin:0;padding:10px;width:300px;color:#000;}
+  .center{text-align:center;} .bold{font-weight:bold;} .line{border-top:1px dashed #000;margin:6px 0;}
+  table{width:100%;border-collapse:collapse;} .right{text-align:right;}
+  .rec{margin-top:4px;} .logo{font-size:18px;font-weight:900;letter-spacing:1px;}
+</style></head><body>
+<div class="center logo">${nombreOptica}</div>
+<div class="center bold">${paciente.sucursal}</div>
+${direccion ? `<div class="center">${direccion}</div>` : ""}
+${telefono ? `<div class="center">Tel: ${telefono}</div>` : ""}
+<div class="line"></div>
+<div><span class="bold">ORDEN N°</span> ${String(paciente.id).slice(-6).padStart(6,"0")}</div>
+<div><span class="bold">FECHA:</span> ${paciente.fecha}</div>
+<div><span class="bold">NOMBRES:</span> ${paciente.nombre}</div>
+${paciente.dni ? `<div><span class="bold">DNI:</span> ${paciente.dni}</div>` : ""}
+${paciente.telefono ? `<div><span class="bold">TELÉFONO:</span> ${paciente.telefono}</div>` : ""}
+${paciente.fechaEntrega ? `<div><span class="bold">FECHA ENTREGA:</span> ${paciente.fechaEntrega}</div>` : ""}
+<div class="line"></div>
+<table>
+  <tr><td class="bold">CANT</td><td class="bold">DESCRIPCIÓN</td><td class="bold right">P.VTA</td><td class="bold right">TOTAL</td></tr>
+  <tr><td colspan="4"><div class="line"></div></td></tr>
+  ${itemsHTML}
+  <tr><td colspan="4"><div class="line"></div></td></tr>
+  <tr><td colspan="3" class="right bold">TOTAL:</td><td class="right bold">${Number(paciente.total).toFixed(2)}</td></tr>
+  <tr><td colspan="3" class="right bold">A.CTA:</td><td class="right bold">${Number(abonado).toFixed(2)}</td></tr>
+  <tr><td colspan="3" class="right bold">SALDO:</td><td class="right bold">${Number(saldo).toFixed(2)}</td></tr>
+</table>
+${paciente.observaciones ? `<div class="line"></div><div><span class="bold">OBSERVACION:</span> ${paciente.observaciones}</div>` : ""}
+<div class="line"></div>
+<div><span class="bold">VENTA A:</span> CONTADO</div>
+<div class="line"></div>
+<div class="bold rec">RECOMENDACIONES:</div>
+${recomendaciones.map((r, i) => `<div class="rec">${i+1}) ${r}</div>`).join("")}
+<div class="line"></div>
+<div class="center" style="font-size:10px;">Gracias por su preferencia</div>
+</body></html>`;
+};
+
+const generarHTMLMedida = (paciente, datosOptica = {}) => {
+  const g = paciente.graduacion || {};
+  const nombreOptica = datosOptica.nombre || "OPTIMANAGER";
+  const sucursalData = (datosOptica.sucursales || []).find(s => s.nombre === paciente.sucursal) || {};
+  const direccion = sucursalData.direccion || paciente.sucursal || "";
+  const telefono = sucursalData.telefono || "";
+
+  const fila = (ojo, esfera, cilindro, eje, adicion, dp) => `
+    <tr>
+      <td class="bold" style="padding:4px 8px;background:#f5f5f5;">${ojo}</td>
+      <td style="padding:4px 8px;text-align:center;">${esfera||"—"}</td>
+      <td style="padding:4px 8px;text-align:center;">${cilindro||"—"}</td>
+      <td style="padding:4px 8px;text-align:center;">${eje||"—"}</td>
+      <td style="padding:4px 8px;text-align:center;">${adicion||"—"}</td>
+      <td style="padding:4px 8px;text-align:center;">${dp||"—"}</td>
+    </tr>`;
+
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+  body{font-family:'Courier New',monospace;font-size:12px;margin:0;padding:10px;width:300px;color:#000;}
+  .center{text-align:center;} .bold{font-weight:bold;} .line{border-top:1px dashed #000;margin:6px 0;}
+  table{width:100%;border-collapse:collapse;border:1px solid #000;}
+  th{background:#000;color:#fff;padding:4px 8px;font-size:11px;}
+  td{border:1px solid #ccc;} .logo{font-size:18px;font-weight:900;letter-spacing:1px;}
+</style></head><body>
+<div class="center logo">${nombreOptica}</div>
+<div class="center bold">${paciente.sucursal}</div>
+${direccion ? `<div class="center">${direccion}</div>` : ""}
+${telefono ? `<div class="center">Tel: ${telefono}</div>` : ""}
+<div class="line"></div>
+<div class="center bold" style="font-size:14px;">RECETA ÓPTICA / MEDIDA</div>
+<div class="line"></div>
+<div><span class="bold">PACIENTE:</span> ${paciente.nombre}</div>
+${paciente.dni ? `<div><span class="bold">DNI:</span> ${paciente.dni}</div>` : ""}
+<div><span class="bold">FECHA:</span> ${paciente.fecha}</div>
+<div class="line"></div>
+<table>
+  <tr>
+    <th>OJO</th><th>ESFERA</th><th>CILINDRO</th><th>EJE</th><th>ADICIÓN</th><th>DP</th>
+  </tr>
+  ${fila("OD 👁", g.odEsfera, g.odCilindro, g.odEje, g.odAdicion, g.odDp)}
+  ${fila("OI 👁", g.oiEsfera, g.oiCilindro, g.oiEje, g.oiAdicion, g.oiDp)}
+</table>
+<div class="line"></div>
+${paciente.tipoLente ? `<div><span class="bold">Tipo de lente:</span> ${paciente.tipoLente}</div>` : ""}
+${paciente.tratamiento ? `<div><span class="bold">Tratamiento:</span> ${paciente.tratamiento === "Digital" ? `Digital - ${paciente.detalleTratamiento||""}` : paciente.tratamiento}</div>` : ""}
+${paciente.materialLuna ? `<div><span class="bold">Material:</span> ${paciente.materialLuna}</div>` : ""}
+${paciente.montura ? `<div><span class="bold">Montura:</span> ${paciente.montura}</div>` : ""}
+${paciente.observaciones ? `<div><span class="bold">Obs:</span> ${paciente.observaciones}</div>` : ""}
+<div class="line"></div>
+<div class="center" style="font-size:10px;">Conserve esta receta para futuras consultas</div>
+</body></html>`;
+};
+
+const imprimirRecibo = (paciente, datosOptica) => {
+  const html = generarHTMLRecibo(paciente, datosOptica);
+  const ventana = window.open("", "_blank", "width=400,height=700");
+  ventana.document.write(html);
+  ventana.document.close();
+  ventana.focus();
+  setTimeout(() => ventana.print(), 500);
+};
+
+const imprimirMedida = (paciente, datosOptica) => {
+  const html = generarHTMLMedida(paciente, datosOptica);
+  const ventana = window.open("", "_blank", "width=400,height=600");
+  ventana.document.write(html);
+  ventana.document.close();
+  ventana.focus();
+  setTimeout(() => ventana.print(), 500);
+};
+
+// ─── CONFIGURACIÓN ÓPTICA ────────────────────────────────────────────
+function ConfiguracionOptica({ datosOptica, onSave }) {
+  const [form, setForm] = useState(() => ({
+    nombre: datosOptica.nombre || "",
+    recomendaciones: datosOptica.recomendaciones
+      ? datosOptica.recomendaciones.join("\n")
+      : "Una vez hecho el contrato no habrá anulación ni devolución del dinero.\nPasado los 30 días no habrá derecho a reclamo.\nLa garantía que brindamos es limpieza y nivelación de lentes. ¡Gracias!",
+    sucursales: datosOptica.sucursales
+      ? datosOptica.sucursales.map(s => ({ ...s }))
+      : SUCURSALES.map(s => ({ nombre: s, direccion: "", telefono: "" })),
+  }));
+  const [guardado, setGuardado] = useState(false);
+  const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const setSucursal = (i, k, v) => setForm(f => {
+    const suc = [...f.sucursales];
+    suc[i] = { ...suc[i], [k]: v };
+    return { ...f, sucursales: suc };
+  });
+
+  const guardar = () => {
+    const datos = {
+      nombre: form.nombre,
+      recomendaciones: form.recomendaciones.split("\n").map(r => r.trim()).filter(Boolean),
+      sucursales: form.sucursales,
+    };
+    onSave(datos);
+    setGuardado(true);
+    setTimeout(() => setGuardado(false), 2500);
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <Card>
+        <div style={{ fontWeight: 800, fontSize: 16, color: "#111827", marginBottom: 18 }}>🏪 Configuración de la Óptica</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <Input label="Nombre de la óptica (aparece en recibos)" value={form.nombre}
+            onChange={e => setField("nombre", e.target.value)} placeholder="Ej: JM VISION" />
+        </div>
+      </Card>
+
+      <Card>
+        <div style={{ fontWeight: 700, fontSize: 14, color: "#374151", marginBottom: 14 }}>🏢 Datos por Sucursal</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {form.sucursales.map((s, i) => (
+            <div key={s.nombre} style={{ background: "#F8FAFF", border: "1.5px solid #BFDBFE", borderRadius: 12, padding: 14 }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "#1D4ED8", marginBottom: 10 }}>🏪 {s.nombre}</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <Input label="Dirección" value={s.direccion}
+                  onChange={e => setSucursal(i, "direccion", e.target.value)}
+                  placeholder="Av. Las Flores 289..." />
+                <Input label="Teléfono" value={s.telefono}
+                  onChange={e => setSucursal(i, "telefono", e.target.value)}
+                  placeholder="933 181 896" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card>
+        <div style={{ fontWeight: 700, fontSize: 14, color: "#374151", marginBottom: 10 }}>📋 Recomendaciones del Recibo</div>
+        <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 8 }}>Una por línea. Aparecerán numeradas en el recibo impreso.</div>
+        <textarea value={form.recomendaciones}
+          onChange={e => setField("recomendaciones", e.target.value)}
+          rows={5}
+          style={{ width: "100%", border: "1.5px solid #D1D5DB", borderRadius: 10, padding: "9px 13px", fontSize: 13, fontFamily: "inherit", background: "#FAFAFA", resize: "vertical", outline: "none", boxSizing: "border-box" }}
+          onFocus={e => e.target.style.borderColor = "#1D4ED8"}
+          onBlur={e => e.target.style.borderColor = "#D1D5DB"}
+        />
+      </Card>
+
+      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <Btn onClick={guardar} style={{ padding: "11px 28px", fontSize: 14 }}>
+          💾 Guardar Configuración
+        </Btn>
+        {guardado && (
+          <div style={{ background: "#ECFDF5", border: "1px solid #6EE7B7", borderRadius: 10, padding: "8px 16px", fontSize: 13, color: "#065f46", fontWeight: 600 }}>
+            ✅ ¡Guardado correctamente!
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function OptiManager() {
   const [pantalla, setPantalla] = useState("login");
   const [usuarioActual, setUsuarioActual] = useState(null);
@@ -1204,14 +1432,23 @@ export default function OptiManager() {
   const [modalNuevo, setModalNuevo] = useState(false);
   const [movimientos, setMovimientos] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [datosOptica, setDatosOptica] = useState({
+    nombre: "",
+    recomendaciones: [],
+    sucursales: SUCURSALES.map(s => ({ nombre: s, direccion: "", telefono: "" })),
+  });
   const esJefe = usuarioActual?.rol === "jefe";
 
   useEffect(() => {
     const unsubPacientes = onSnapshot(collection(db, "pacientes"), (snap) => { setPacientes(snap.docs.map(d => ({ ...d.data(), id: d.id }))); });
     const unsubMovimientos = onSnapshot(collection(db, "movimientos"), (snap) => { setMovimientos(snap.docs.map(d => ({ ...d.data(), id: d.id }))); });
     const unsubUsuarios = onSnapshot(collection(db, "usuarios"), (snap) => { const fbUsuarios = snap.docs.map(d => ({ ...d.data(), id: d.id })); if (fbUsuarios.length > 0) setUsuarios(prev => { const adminDefault = prev.find(u => u.username === "admin"); return adminDefault ? [adminDefault, ...fbUsuarios] : fbUsuarios; }); });
+    const unsubOptica = onSnapshot(collection(db, "configuracion"), (snap) => {
+      const docOptica = snap.docs.find(d => d.id === "optica");
+      if (docOptica) setDatosOptica(docOptica.data());
+    });
     setCargando(false);
-    return () => { unsubPacientes(); unsubMovimientos(); unsubUsuarios(); };
+    return () => { unsubPacientes(); unsubMovimientos(); unsubUsuarios(); unsubOptica(); };
   }, []);
 
   const handleLogin = (usuario, sede) => { setUsuarioActual(usuario); setSedeActual(sede); setPantalla("app"); };
@@ -1222,6 +1459,10 @@ export default function OptiManager() {
   const eliminarPaciente = async (id) => { await deleteDoc(doc(db, "pacientes", id)); };
   const anularVenta = async (id) => { await deleteDoc(doc(db, "pacientes", id)); };
   const addMovimiento = async (mov) => { await addDoc(collection(db, "movimientos"), { ...mov, id: Date.now() }); };
+  const guardarDatosOptica = async (datos) => {
+    await setDoc(doc(db, "configuracion", "optica"), datos);
+    setDatosOptica(datos);
+  };
 
   if (cargando) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", fontSize: 18, color: "#059669" }}>⏳ Cargando OptiManager...</div>;
   if (pantalla === "login") return <PantallaLogin usuarios={usuarios} onLogin={handleLogin} onIrRegistro={() => setPantalla("registro")} />;
@@ -1234,6 +1475,7 @@ export default function OptiManager() {
     { key: "cuentas", label: "Cuentas", icon: "💳" },
     { key: "movimientos", label: "Movimientos", icon: "💸" },
     { key: "reporte", label: "Reporte", icon: "📑" },
+    ...(esJefe ? [{ key: "mi_optica", label: "Mi Óptica", icon: "🏪" }] : []),
   ];
 
   return (
@@ -1266,11 +1508,12 @@ export default function OptiManager() {
       </div>
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 20px" }}>
         {vista === "dashboard" && <Dashboard pacientes={pacientes.filter(p => sucursalFiltro === "Todas" || p.sucursal === sucursalFiltro)} />}
-        {vista === "pacientes" && <Pacientes pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} sucursalFiltro={sucursalFiltro} esJefe={esJefe} />}
-        {vista === "directorio" && <Directorio pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} esJefe={esJefe} />}
+        {vista === "pacientes" && <Pacientes pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} sucursalFiltro={sucursalFiltro} esJefe={esJefe} datosOptica={datosOptica} />}
+        {vista === "directorio" && <Directorio pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} esJefe={esJefe} datosOptica={datosOptica} />}
         {vista === "cuentas" && <Cuentas pacientes={pacientes} sucursalFiltro={sucursalFiltro} />}
         {vista === "movimientos" && <Movimientos movimientos={movimientos} onAdd={addMovimiento} sucursalFiltro={sucursalFiltro} />}
         {vista === "reporte" && <Reporte pacientes={pacientes.filter(p => sucursalFiltro === "Todas" || p.sucursal === sucursalFiltro)} movimientos={movimientos} sucursalFiltro={sucursalFiltro} esJefe={esJefe} onAnularVenta={anularVenta} />}
+        {vista === "mi_optica" && esJefe && <ConfiguracionOptica datosOptica={datosOptica} onSave={guardarDatosOptica} />}
       </div>
       {modalNuevo && <ModalNuevoPaciente onClose={() => setModalNuevo(false)} onSave={addPaciente} sucursalActual={sedeActual} pacientes={pacientes} />}
     </div>
