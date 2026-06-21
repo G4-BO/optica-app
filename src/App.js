@@ -55,13 +55,11 @@ function imprimirRecibo(p, config, atendidoPor) {
   const abonado = totalAbonado(p);
   const saldo = saldoPendiente(p);
 
-  // Descripción de lunas
+  // Descripción de lunas (sin medida/graduación)
   const descLunas = [
     p.tipoLente,
     p.tratamiento === "Digital" ? `Digital - ${p.detalleTratamiento || ""}` : p.tratamiento,
-    p.materialLuna && `${p.materialLuna}`,
-    p.graduacion?.odEsfera ? `OD: ${p.graduacion.odEsfera}` : "",
-    p.graduacion?.oiEsfera ? `OI: ${p.graduacion.oiEsfera}` : "",
+    p.materialLuna || "",
   ].filter(Boolean).join(" / ") || "Lentes";
 
   const precioLunas = p.precioLunas || 0;
@@ -97,13 +95,13 @@ function imprimirRecibo(p, config, atendidoPor) {
     ${cfg.direccion ? `<div class="center">${cfg.direccion}</div>` : ""}
     ${cfg.telefonos ? `<div class="center">TELÉFONOS: ${cfg.telefonos}</div>` : ""}
     <div class="line"></div>
-    <div>ORDEN N°: ${(p.id || "").toString().slice(-8).toUpperCase()}</div>
+    <div>ORDEN N°: ${String(p.ordenNum || 1).padStart(5,"0")}</div>
     <div>FECHA: ${p.fecha || ""}</div>
     <div>NOMBRES: ${p.nombre || ""}</div>
     ${p.dni ? `<div>DNI: ${p.dni}</div>` : ""}
     ${p.telefono ? `<div>TELÉFONO: ${p.telefono}</div>` : ""}
     <div>SUCURSAL: ${p.sucursal || ""}</div>
-    ${p.fechaEntrega ? `<div>FECHA DE ENTREGA: ${p.fechaEntrega} 19:00:00</div>` : ""}
+    ${p.fechaEntrega ? `<div>FECHA DE ENTREGA: ${p.fechaEntrega} ${p.horaEntrega || "19:00"}:00</div>` : ""}
     <div class="line"></div>
     <table>
       <tr><th>CANT</th><th>DESCRIPCIÓN</th><th class="right">P.VTA</th><th class="right">TOTAL</th></tr>
@@ -634,14 +632,14 @@ function PantallaRegistro({ usuarios, onRegistroExitoso, onVolver }) {
   );
 }
 
-function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [] }) {
+function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [], configuraciones = {}, atendidoPor = "" }) {
   const [form, setForm] = useState({
     dni: "", nombre: "", apellidos: "", telefono: "",
     sucursal: sucursalActual,
     tipoLente: "", tratamiento: "", detalleTratamiento: "", montura: "", materialLuna: "",
     precioLunas: "", precioMontura: "",
     total: "", adelanto: "", metodoPago: "Efectivo",
-    graduacion: graduacionVacia(), fecha: today(), fechaEntrega: "", observaciones: "",
+    graduacion: graduacionVacia(), fecha: today(), fechaEntrega: "", horaEntrega: "19:00", observaciones: "",
   });
   const [buscandoDni, setBuscandoDni] = useState(false);
   const [dniError, setDniError] = useState("");
@@ -681,7 +679,7 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [] })
     if (!nombreCompleto || !form.total || !form.adelanto) return alert("Completa nombre, total y adelanto.");
     const nuevo = {
       id: Date.now(), dni: form.dni, nombre: nombreCompleto, telefono: form.telefono, sucursal: form.sucursal,
-      fecha: form.fecha, fechaEntrega: form.fechaEntrega, tipoLente: form.tipoLente, tratamiento: form.tratamiento,
+      fecha: form.fecha, fechaEntrega: form.fechaEntrega, horaEntrega: form.horaEntrega || "19:00", tipoLente: form.tipoLente, tratamiento: form.tratamiento,
       detalleTratamiento: form.detalleTratamiento, montura: form.montura, materialLuna: form.materialLuna,
       precioLunas: parseFloat(form.precioLunas) || 0,
       precioMontura: parseFloat(form.precioMontura) || 0,
@@ -689,7 +687,7 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [] })
       abonos: [{ monto: parseFloat(form.adelanto), fecha: form.fecha, nota: "Adelanto inicial", metodo: form.metodoPago }],
       estado: "PEDIDO",
     };
-    onSave(nuevo); onClose();
+    onSave(nuevo, configuraciones[nuevo.sucursal] || configImpresionVacia(nuevo.sucursal), atendidoPor); onClose();
   };
 
   const cargarPacienteExistente = () => {
@@ -748,6 +746,9 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [] })
             <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Input label="Fecha de compra" type="date" value={form.fecha} onChange={e => set("fecha", e.target.value)} />
               <Input label="Fecha estimada de entrega" type="date" value={form.fechaEntrega} onChange={e => set("fechaEntrega", e.target.value)} />
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <Input label="⏰ Hora de entrega" type="time" value={form.horaEntrega} onChange={e => set("horaEntrega", e.target.value)} style={{ maxWidth: 180 }} />
             </div>
           </div>
           <div>
@@ -1511,7 +1512,23 @@ export default function OptiManager() {
   const handleLogout = () => { setUsuarioActual(null); setPantalla("login"); setVista("dashboard"); };
   const handleRegistro = async (nuevoUsuario) => { await addDoc(collection(db, "usuarios"), nuevoUsuario); setPantalla("login"); alert("¡Cuenta creada! Ya puedes iniciar sesión."); };
   const updatePaciente = async (updated) => { const { id, ...data } = updated; await updateDoc(doc(db, "pacientes", id), data); };
-  const addPaciente = async (nuevo) => { await addDoc(collection(db, "pacientes"), nuevo); setVista("pacientes"); };
+  const addPaciente = async (nuevo, configImp, atendidoPorNombre) => {
+    // Correlativo por sucursal
+    const contadorRef = doc(db, "contadores", nuevo.sucursal);
+    let ordenNum = 1;
+    try {
+      const { getDoc } = await import("firebase/firestore");
+      const snap = await getDoc(contadorRef);
+      ordenNum = snap.exists() ? (snap.data().ultimo || 0) + 1 : 1;
+      await setDoc(contadorRef, { ultimo: ordenNum }, { merge: true });
+    } catch(e) { console.error("Error correlativo:", e); }
+    const nuevoConOrden = { ...nuevo, ordenNum };
+    const docRef = await addDoc(collection(db, "pacientes"), nuevoConOrden);
+    const pacienteGuardado = { ...nuevoConOrden, id: docRef.id };
+    setVista("pacientes");
+    // Imprimir recibo automáticamente
+    setTimeout(() => imprimirRecibo(pacienteGuardado, configImp, atendidoPorNombre), 300);
+  };
   const eliminarPaciente = async (id) => { await deleteDoc(doc(db, "pacientes", id)); };
   const anularVenta = async (id) => { await deleteDoc(doc(db, "pacientes", id)); };
   const addMovimiento = async (mov) => { await addDoc(collection(db, "movimientos"), { ...mov, id: Date.now() }); };
@@ -1611,7 +1628,7 @@ export default function OptiManager() {
         {vista === "movimientos" && <Movimientos movimientos={movimientos} onAdd={addMovimiento} sucursalFiltro={sucursalFiltro} />}
         {vista === "reporte" && <Reporte pacientes={pacientes.filter(p => sucursalFiltro === "Todas" || p.sucursal === sucursalFiltro)} movimientos={movimientos} sucursalFiltro={sucursalFiltro} esJefe={esJefe} onAnularVenta={anularVenta} />}
       </div>
-      {modalNuevo && <ModalNuevoPaciente onClose={() => setModalNuevo(false)} onSave={addPaciente} sucursalActual={sedeActual} pacientes={pacientes} />}
+      {modalNuevo && <ModalNuevoPaciente onClose={() => setModalNuevo(false)} onSave={addPaciente} sucursalActual={sedeActual} pacientes={pacientes} configuraciones={configuraciones} atendidoPor={usuarioActual?.nombre || usuarioActual?.username} />}
       {modalConfig && <ModalConfiguracionImpresion sucursal={sedeActual} config={configuraciones[sedeActual]} onSave={guardarConfigSucursal} onClose={() => setModalConfig(false)} />}
     </div>
   );
