@@ -1377,10 +1377,106 @@ function ModalConfiguracionImpresion({ sucursal, config, onSave, onClose }) {
 
 const TEMAS_COLOR = [
   { id: "azul", nombre: "Azul Clásico", primario: "#1D4ED8", secundario: "#1e3a8a", acento: "#3B82F6", bg: "#EFF6FF" },
-  { id: "verde", nombre: "Verde Esmeralda", primario: "#059669", secundario: "#064e3b", acento: "#10B981", bg: "#ECFDF5" },
-  { id: "violeta", nombre: "Violeta Moderno", primario: "#7C3AED", secundario: "#4c1d95", acento: "#8B5CF6", bg: "#F5F3FF" },
-  { id: "rojo", nombre: "Rojo Corporativo", primario: "#DC2626", secundario: "#7f1d1d", acento: "#EF4444", bg: "#FEF2F2" },
 ];
+
+function ModalPersonalizarColores({ temaActual, onAplicar, onClose, generarCombinaciones }) {
+  const [paso, setPaso] = useState(1);
+  const [colores, setColores] = useState(["#1D4ED8", "#10B981", ""]);
+  const [combos, setCombos] = useState([]);
+  const [seleccionado, setSeleccionado] = useState(null);
+
+  const avanzar = () => {
+    const validos = colores.filter(c => c && /^#[0-9a-fA-F]{6}$/.test(c));
+    if (validos.length < 2) return alert("Elige al menos 2 colores");
+    const generadas = generarCombinaciones(validos);
+    setCombos(generadas);
+    setSeleccionado(generadas[0]);
+    setPaso(2);
+  };
+
+  const NavPreview = ({ tema }) => (
+    <div style={{ borderRadius: 8, overflow: "hidden", border: "1px solid #E5E7EB", marginBottom: 6 }}>
+      <div style={{ background: tema.primario, padding: "8px 12px", display: "flex", gap: 6, alignItems: "center" }}>
+        <div style={{ background: "#fff", borderRadius: 5, width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10 }}>👁</div>
+        <span style={{ color: "#fff", fontWeight: 800, fontSize: 10 }}>OPTIMANAGER</span>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 4 }}>
+          {["📊","👥","💸"].map((ic,i) => <span key={i} style={{ background: "rgba(255,255,255,0.2)", borderRadius: 4, padding: "2px 5px", fontSize: 9, color: "#fff" }}>{ic}</span>)}
+        </div>
+      </div>
+      <div style={{ background: tema.bg || "#F1F5F9", padding: "8px 12px", display: "flex", gap: 6 }}>
+        {[1,2,3].map(i => <div key={i} style={{ flex: 1, background: "#fff", borderRadius: 6, padding: "6px 8px", border: `1.5px solid ${tema.acento}30` }}><div style={{ width: "60%", height: 5, background: tema.acento, borderRadius: 3, marginBottom: 4 }} /><div style={{ width: "40%", height: 8, background: tema.primario, borderRadius: 3 }} /></div>)}
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 3000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: "#fff", borderRadius: 22, padding: 28, width: "100%", maxWidth: paso === 2 ? 560 : 400, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", maxHeight: "90vh", overflowY: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "#111827" }}>
+            🎨 {paso === 1 ? "Elige tus colores" : "Elige una combinación"}
+          </h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#9CA3AF" }}>✕</button>
+        </div>
+
+        {paso === 1 && (
+          <>
+            <p style={{ fontSize: 13, color: "#6B7280", margin: "0 0 20px" }}>Elige 2 o 3 colores que representen tu óptica. Con ellos se generarán 4 combinaciones.</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {[0,1,2].map(i => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: colores[i] || "#E5E7EB", border: "2px solid #D1D5DB", overflow: "hidden", flexShrink: 0 }}>
+                    <input type="color" value={colores[i] || "#ffffff"} onChange={e => { const c = [...colores]; c[i] = e.target.value; setColores(c); }}
+                      style={{ width: 60, height: 60, border: "none", cursor: "pointer", marginTop: -12, marginLeft: -12, padding: 0, background: "none" }} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <input value={colores[i]} onChange={e => { const c = [...colores]; c[i] = e.target.value; setColores(c); }}
+                      placeholder={i < 2 ? `Color ${i+1} (obligatorio)` : "Color 3 (opcional)"}
+                      style={{ width: "100%", border: "1.5px solid #D1D5DB", borderRadius: 10, padding: "9px 13px", fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box", background: "#FAFAFA" }} />
+                  </div>
+                  {i === 2 && colores[2] && (
+                    <button onClick={() => { const c = [...colores]; c[2] = ""; setColores(c); }} style={{ background: "none", border: "none", color: "#9CA3AF", fontSize: 18, cursor: "pointer" }}>✕</button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 24, justifyContent: "flex-end" }}>
+              <button onClick={onClose} style={{ padding: "9px 18px", borderRadius: 10, border: "1.5px solid #E5E7EB", background: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#6B7280", fontFamily: "inherit" }}>Cancelar</button>
+              <button onClick={avanzar} style={{ padding: "9px 20px", borderRadius: 10, border: "none", background: "#1D4ED8", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#fff", fontFamily: "inherit" }}>Ver combinaciones →</button>
+            </div>
+          </>
+        )}
+
+        {paso === 2 && (
+          <>
+            <p style={{ fontSize: 13, color: "#6B7280", margin: "0 0 16px" }}>Elige la combinación que más te guste para tu sistema.</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              {combos.map(combo => (
+                <button key={combo.id} onClick={() => setSeleccionado(combo)} style={{
+                  border: seleccionado?.id === combo.id ? `2.5px solid ${combo.primario}` : "2px solid #E5E7EB",
+                  borderRadius: 14, padding: 12, background: seleccionado?.id === combo.id ? combo.bg || "#F0F9FF" : "#FAFAFA",
+                  cursor: "pointer", textAlign: "left", transition: "all 0.15s"
+                }}>
+                  <NavPreview tema={combo} />
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{combo.nombre}</span>
+                    <div style={{ display: "flex", gap: 3 }}>
+                      {[combo.primario, combo.acento, combo.secundario].map((c,i) => <div key={i} style={{ width: 14, height: 14, borderRadius: "50%", background: c }} />)}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}>
+              <button onClick={() => setPaso(1)} style={{ padding: "9px 18px", borderRadius: 10, border: "1.5px solid #E5E7EB", background: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#6B7280", fontFamily: "inherit" }}>← Volver</button>
+              <button onClick={() => seleccionado && onAplicar(seleccionado)} style={{ padding: "9px 20px", borderRadius: 10, border: "none", background: seleccionado?.primario || "#1D4ED8", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#fff", fontFamily: "inherit" }}>✓ Aplicar</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function OptiManager() {
   const [pantalla, setPantalla] = useState("login");
@@ -1435,49 +1531,50 @@ export default function OptiManager() {
 
   const t = temaActual;
 
+  // Genera 4 combinaciones a partir de los colores elegidos por el usuario
+  const generarCombinaciones = (colores) => {
+    const [c1, c2, c3] = colores;
+    const hexToRgb = h => { const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h); return r ? [parseInt(r[1],16),parseInt(r[2],16),parseInt(r[3],16)] : [0,0,0]; };
+    const lighten = (hex, amt) => { const [r,g,b] = hexToRgb(hex); return `rgb(${Math.min(255,r+amt)},${Math.min(255,g+amt)},${Math.min(255,b+amt)})`; };
+    const darken = (hex, amt) => { const [r,g,b] = hexToRgb(hex); return `rgb(${Math.max(0,r-amt)},${Math.max(0,g-amt)},${Math.max(0,b-amt)})`; };
+    const c2safe = c2 || c1; const c3safe = c3 || c2safe;
+    return [
+      { id:"combo1", nombre:"Clásico", primario: c1, secundario: darken(c1,40), acento: c2safe, bg: lighten(c1,200) },
+      { id:"combo2", nombre:"Contraste", primario: c2safe, secundario: c1, acento: c3safe, bg: lighten(c2safe,200) },
+      { id:"combo3", nombre:"Degradado", primario: darken(c1,20), secundario: darken(c2safe,30), acento: c3safe, bg: lighten(c3safe,210) },
+      { id:"combo4", nombre:"Invertido", primario: c3safe, secundario: darken(c3safe,40), acento: c1, bg: lighten(c1,215) },
+    ];
+  };
+
   return (
     <div style={{ minHeight: "100vh", background: t.bg.replace("FF", "F1"), fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}>
-      {/* ── MODAL COLORES ── */}
-      {modalColores && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 3000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "#fff", borderRadius: 20, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "#111827" }}>🎨 Personalizar Colores</h3>
-              <button onClick={() => setModalColores(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#9CA3AF" }}>✕</button>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {TEMAS_COLOR.map(tema => (
-                <button key={tema.id} onClick={() => { setTemaActual(tema); setModalColores(false); }} style={{
-                  display: "flex", alignItems: "center", gap: 14, padding: "14px 16px",
-                  borderRadius: 14, border: temaActual.id === tema.id ? `2.5px solid ${tema.primario}` : "2px solid #E5E7EB",
-                  background: temaActual.id === tema.id ? tema.bg : "#FAFAFA",
-                  cursor: "pointer", textAlign: "left", transition: "all 0.15s"
-                }}>
-                  <div style={{ display: "flex", gap: 5 }}>
-                    <div style={{ width: 22, height: 22, borderRadius: "50%", background: tema.primario }} />
-                    <div style={{ width: 22, height: 22, borderRadius: "50%", background: tema.acento }} />
-                    <div style={{ width: 22, height: 22, borderRadius: "50%", background: tema.secundario }} />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>{tema.nombre}</div>
-                    <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>{tema.primario}</div>
-                  </div>
-                  {temaActual.id === tema.id && <div style={{ marginLeft: "auto", fontSize: 18 }}>✅</div>}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-      <div style={{ background: t.primario, padding: "0 24px", position: "sticky", top: 0, zIndex: 100, boxShadow: `0 2px 12px ${t.primario}4D` }}>
+
+      {/* ── OVERLAY cierra menú al hacer click fuera ── */}
+      {menuAbierto && <div onClick={() => setMenuAbierto(false)} style={{ position: "fixed", inset: 0, zIndex: 150 }} />}
+
+      {/* ── MODAL COLORES: paso 1 elige colores, paso 2 elige combinación ── */}
+      {modalColores && <ModalPersonalizarColores temaActual={temaActual} onAplicar={(tema) => { setTemaActual(tema); setModalColores(false); }} onClose={() => setModalColores(false)} generarCombinaciones={generarCombinaciones} />}
+
+      <div style={{ background: t.primario, padding: "0 24px", position: "sticky", top: 0, zIndex: 200, boxShadow: `0 2px 12px ${t.primario}4D` }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", gap: 16 }}>
+
           {/* ── MENÚ HAMBURGUESA ── */}
-          <div style={{ position: "relative" }}>
-            <button onClick={() => setMenuAbierto(!menuAbierto)} style={{ background: menuAbierto ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.12)", border: "none", borderRadius: 10, padding: "8px 12px", cursor: "pointer", color: "#fff", fontSize: 18, fontFamily: "inherit", transition: "background 0.2s" }}>☰</button>
+          <div style={{ position: "relative", zIndex: 201 }}>
+            <button onClick={() => setMenuAbierto(!menuAbierto)} style={{ background: menuAbierto ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.12)", border: "none", borderRadius: 10, padding: "9px 13px", cursor: "pointer", color: "#fff", fontSize: 20, fontFamily: "inherit", transition: "background 0.2s", lineHeight: 1 }}>☰</button>
             {menuAbierto && (
-              <div style={{ position: "absolute", top: "calc(100% + 10px)", left: 0, width: 220, background: "#fff", borderRadius: 14, boxShadow: "0 8px 30px rgba(0,0,0,0.15)", border: "1px solid #E8EEF4", zIndex: 500, overflow: "hidden" }}>
-                <button onClick={() => { setVista("cuentas"); setMenuAbierto(false); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "13px 16px", background: vista === "cuentas" ? t.bg : "transparent", border: "none", cursor: "pointer", fontSize: 14, fontWeight: vista === "cuentas" ? 700 : 500, color: vista === "cuentas" ? t.primario : "#374151", fontFamily: "inherit", borderBottom: "1px solid #F3F4F6" }}>💳 Cuentas</button>
-                <button onClick={() => { setModalColores(true); setMenuAbierto(false); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "13px 16px", background: "transparent", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 500, color: "#374151", fontFamily: "inherit" }}>🎨 Personalizar Colores</button>
+              <div style={{ position: "absolute", top: "calc(100% + 12px)", left: 0, width: 240, background: "#fff", borderRadius: 16, boxShadow: "0 12px 40px rgba(0,0,0,0.18)", border: "1px solid #E8EEF4", zIndex: 202, overflow: "hidden" }}>
+                <div style={{ background: t.primario, padding: "14px 18px" }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: "#fff", letterSpacing: 1, textTransform: "uppercase", opacity: 0.85 }}>Menú</div>
+                </div>
+                <div style={{ padding: "6px 0" }}>
+                  <button onClick={() => { setVista("cuentas"); setMenuAbierto(false); }} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 18px", background: vista === "cuentas" ? `${t.bg}` : "transparent", border: "none", cursor: "pointer", fontSize: 14, fontWeight: vista === "cuentas" ? 700 : 500, color: vista === "cuentas" ? t.primario : "#374151", fontFamily: "inherit" }}>
+                    <span style={{ fontSize: 18 }}>💳</span> Cuentas
+                  </button>
+                  <div style={{ height: 1, background: "#F3F4F6", margin: "2px 12px" }} />
+                  <button onClick={() => { setModalColores(true); setMenuAbierto(false); }} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 18px", background: "transparent", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 500, color: "#374151", fontFamily: "inherit" }}>
+                    <span style={{ fontSize: 18 }}>🎨</span> Personalizar Colores
+                  </button>
+                </div>
               </div>
             )}
           </div>
