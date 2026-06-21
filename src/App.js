@@ -54,7 +54,28 @@ function imprimirRecibo(p, config, atendidoPor) {
   const cfg = config || configImpresionVacia(p.sucursal);
   const abonado = totalAbonado(p);
   const saldo = saldoPendiente(p);
-  const descripcionCompra = [p.tipoLente, p.tratamiento === "Digital" ? `Digital - ${p.detalleTratamiento || ""}` : p.tratamiento, p.materialLuna && `Luna: ${p.materialLuna}`, p.montura && `Montura: ${p.montura}`].filter(Boolean).join(" · ") || "Lentes";
+
+  // Descripción de lunas
+  const descLunas = [
+    p.tipoLente,
+    p.tratamiento === "Digital" ? `Digital - ${p.detalleTratamiento || ""}` : p.tratamiento,
+    p.materialLuna && `${p.materialLuna}`,
+    p.graduacion?.odEsfera ? `OD: ${p.graduacion.odEsfera}` : "",
+    p.graduacion?.oiEsfera ? `OI: ${p.graduacion.oiEsfera}` : "",
+  ].filter(Boolean).join(" / ") || "Lentes";
+
+  const precioLunas = p.precioLunas || 0;
+  const precioMontura = p.precioMontura || 0;
+  const tieneItemsSeparados = precioLunas > 0 || precioMontura > 0;
+
+  // Si no hay precios separados, fallback al modo antiguo
+  const filasProductos = tieneItemsSeparados
+    ? `
+      ${precioLunas > 0 ? `<tr><td>1</td><td>${descLunas}</td><td class="right">${precioLunas.toFixed(2)}</td><td class="right">${precioLunas.toFixed(2)}</td></tr>` : ""}
+      ${precioMontura > 0 ? `<tr><td>1</td><td>MONTURA ${p.montura ? `${p.montura}` : "OFTÁLMICA"}${precioMontura < (p.precioMonturaBruta||precioMontura) ? ` (Bonificación -${precioMontura.toFixed(4)})` : ""}</td><td class="right">${precioMontura.toFixed(2)}</td><td class="right">${precioMontura.toFixed(2)}</td></tr>` : ""}
+    `
+    : `<tr><td>1</td><td>${descLunas}${p.montura ? ` / ${p.montura}` : ""}</td><td class="right">${p.total.toFixed(2)}</td><td class="right">${p.total.toFixed(2)}</td></tr>`;
+
   const win = window.open("", "_blank", "width=420,height=640");
   if (!win) { alert("Tu navegador bloqueó la ventana de impresión. Permite las ventanas emergentes para este sitio e intenta de nuevo."); return; }
   win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Recibo</title>
@@ -82,16 +103,16 @@ function imprimirRecibo(p, config, atendidoPor) {
     ${p.dni ? `<div>DNI: ${p.dni}</div>` : ""}
     ${p.telefono ? `<div>TELÉFONO: ${p.telefono}</div>` : ""}
     <div>SUCURSAL: ${p.sucursal || ""}</div>
-    ${p.fechaEntrega ? `<div>FECHA DE ENTREGA: ${p.fechaEntrega}</div>` : ""}
+    ${p.fechaEntrega ? `<div>FECHA DE ENTREGA: ${p.fechaEntrega} 19:00:00</div>` : ""}
     <div class="line"></div>
     <table>
-      <tr><th>CANT</th><th>DESCRIPCIÓN</th><th class="right">TOTAL</th></tr>
-      <tr><td>1</td><td>${descripcionCompra}</td><td class="right">${fmt(p.total)}</td></tr>
+      <tr><th>CANT</th><th>DESCRIPCIÓN</th><th class="right">P.VTA</th><th class="right">TOTAL</th></tr>
+      ${filasProductos}
     </table>
     <div class="line"></div>
-    <div class="row bold"><span>TOTAL:</span><span>${fmt(p.total)}</span></div>
-    <div class="row"><span>A CTA:</span><span>${fmt(abonado)}</span></div>
-    <div class="row bold"><span>SALDO:</span><span>${fmt(saldo)}</span></div>
+    <div class="row bold"><span>TOTAL:</span><span>${p.total.toFixed(2)}</span></div>
+    <div class="row"><span>A.CTA:</span><span>${abonado.toFixed(2)}</span></div>
+    <div class="row bold"><span>SALDO:</span><span>${saldo.toFixed(2)}</span></div>
     ${p.observaciones ? `<div class="line"></div><div class="bold">OBSERVACIÓN:</div><div>${p.observaciones}</div>` : ""}
     <div class="line"></div>
     <div>VENTA A: ${saldo <= 0 ? "CONTADO" : "CRÉDITO"}</div>
@@ -618,6 +639,7 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [] })
     dni: "", nombre: "", apellidos: "", telefono: "",
     sucursal: sucursalActual,
     tipoLente: "", tratamiento: "", detalleTratamiento: "", montura: "", materialLuna: "",
+    precioLunas: "", precioMontura: "",
     total: "", adelanto: "", metodoPago: "Efectivo",
     graduacion: graduacionVacia(), fecha: today(), fechaEntrega: "", observaciones: "",
   });
@@ -661,6 +683,8 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [] })
       id: Date.now(), dni: form.dni, nombre: nombreCompleto, telefono: form.telefono, sucursal: form.sucursal,
       fecha: form.fecha, fechaEntrega: form.fechaEntrega, tipoLente: form.tipoLente, tratamiento: form.tratamiento,
       detalleTratamiento: form.detalleTratamiento, montura: form.montura, materialLuna: form.materialLuna,
+      precioLunas: parseFloat(form.precioLunas) || 0,
+      precioMontura: parseFloat(form.precioMontura) || 0,
       observaciones: form.observaciones, total: parseFloat(form.total), graduacion: form.graduacion,
       abonos: [{ monto: parseFloat(form.adelanto), fecha: form.fecha, nota: "Adelanto inicial", metodo: form.metodoPago }],
       estado: "PEDIDO",
@@ -739,6 +763,14 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [] })
           </div>
           <div style={{ background: "#F0FDF4", borderRadius: 12, padding: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#059669", marginBottom: 10 }}>💰 Pago Inicial</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+              <Input label="Precio Lunas (S/)" type="number" value={form.precioLunas}
+                onChange={e => { const l = e.target.value; const m = form.precioMontura; set("precioLunas", l); set("total", ((parseFloat(l)||0)+(parseFloat(m)||0)).toFixed(2)); }}
+                placeholder="0.00" />
+              <Input label="Precio Montura (S/)" type="number" value={form.precioMontura}
+                onChange={e => { const m = e.target.value; const l = form.precioLunas; set("precioMontura", m); set("total", ((parseFloat(l)||0)+(parseFloat(m)||0)).toFixed(2)); }}
+                placeholder="0.00" />
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
               <Input label="Precio total (S/) *" type="number" value={form.total} onChange={e => set("total", e.target.value)} placeholder="0.00" />
               <Input label="Adelanto (S/) *" type="number" value={form.adelanto} onChange={e => set("adelanto", e.target.value)} placeholder="0.00" />
@@ -834,6 +866,16 @@ function ModalDetalle({ paciente, onClose, onUpdate, onEliminar, esJefe, configu
               <label style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>Observaciones</label>
               <textarea value={p.observaciones || ""} onChange={e => setField("observaciones", e.target.value)}
                 style={{ width: "100%", marginTop: 5, border: "1.5px solid #D1D5DB", borderRadius: 10, padding: "9px 13px", fontSize: 14, fontFamily: "inherit", background: "#FAFAFA", resize: "vertical", minHeight: 60, outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <div style={{ background: "#F0FDF4", borderRadius: 12, padding: 14 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#059669", marginBottom: 10 }}>💰 Precios</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                <Input label="Precio Lunas (S/)" type="number" value={p.precioLunas || ""}
+                  onChange={e => { const l = parseFloat(e.target.value)||0; const m = parseFloat(p.precioMontura)||0; setField("precioLunas", e.target.value); setField("total", l + m); }} placeholder="0.00" />
+                <Input label="Precio Montura (S/)" type="number" value={p.precioMontura || ""}
+                  onChange={e => { const m = parseFloat(e.target.value)||0; const l = parseFloat(p.precioLunas)||0; setField("precioMontura", e.target.value); setField("total", l + m); }} placeholder="0.00" />
+                <Input label="Total (S/)" type="number" value={p.total} onChange={e => setField("total", parseFloat(e.target.value)||0)} placeholder="0.00" />
+              </div>
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <Btn variant="ghost" onClick={() => { setP({ ...paciente, graduacion: paciente.graduacion || graduacionVacia() }); setModoEditar(false); }}>Cancelar</Btn>
@@ -1333,6 +1375,13 @@ function ModalConfiguracionImpresion({ sucursal, config, onSave, onClose }) {
   );
 }
 
+const TEMAS_COLOR = [
+  { id: "azul", nombre: "Azul Clásico", primario: "#1D4ED8", secundario: "#1e3a8a", acento: "#3B82F6", bg: "#EFF6FF" },
+  { id: "verde", nombre: "Verde Esmeralda", primario: "#059669", secundario: "#064e3b", acento: "#10B981", bg: "#ECFDF5" },
+  { id: "violeta", nombre: "Violeta Moderno", primario: "#7C3AED", secundario: "#4c1d95", acento: "#8B5CF6", bg: "#F5F3FF" },
+  { id: "rojo", nombre: "Rojo Corporativo", primario: "#DC2626", secundario: "#7f1d1d", acento: "#EF4444", bg: "#FEF2F2" },
+];
+
 export default function OptiManager() {
   const [pantalla, setPantalla] = useState("login");
   const [usuarioActual, setUsuarioActual] = useState(null);
@@ -1348,6 +1397,9 @@ export default function OptiManager() {
   const [configuraciones, setConfiguraciones] = useState({});
   const [modalConfig, setModalConfig] = useState(false);
   const [cargando, setCargando] = useState(true);
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const [modalColores, setModalColores] = useState(false);
+  const [temaActual, setTemaActual] = useState(TEMAS_COLOR[0]);
   const esJefe = usuarioActual?.rol === "jefe";
 
   useEffect(() => {
@@ -1377,15 +1429,58 @@ export default function OptiManager() {
     { key: "dashboard", label: "Dashboard", icon: "📊" },
     { key: "pacientes", label: "Pacientes", icon: "👥" },
     { key: "directorio", label: "Directorio", icon: "🗂️" },
-    { key: "cuentas", label: "Cuentas", icon: "💳" },
     { key: "movimientos", label: "Movimientos", icon: "💸" },
     { key: "reporte", label: "Reporte", icon: "📑" },
   ];
 
+  const t = temaActual;
+
   return (
-    <div style={{ minHeight: "100vh", background: "#F1F5F9", fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}>
-      <div style={{ background: "#1D4ED8", padding: "0 24px", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 2px 12px rgba(29,78,216,0.3)" }}>
+    <div style={{ minHeight: "100vh", background: t.bg.replace("FF", "F1"), fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}>
+      {/* ── MODAL COLORES ── */}
+      {modalColores && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 3000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "#fff", borderRadius: 20, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "#111827" }}>🎨 Personalizar Colores</h3>
+              <button onClick={() => setModalColores(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#9CA3AF" }}>✕</button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {TEMAS_COLOR.map(tema => (
+                <button key={tema.id} onClick={() => { setTemaActual(tema); setModalColores(false); }} style={{
+                  display: "flex", alignItems: "center", gap: 14, padding: "14px 16px",
+                  borderRadius: 14, border: temaActual.id === tema.id ? `2.5px solid ${tema.primario}` : "2px solid #E5E7EB",
+                  background: temaActual.id === tema.id ? tema.bg : "#FAFAFA",
+                  cursor: "pointer", textAlign: "left", transition: "all 0.15s"
+                }}>
+                  <div style={{ display: "flex", gap: 5 }}>
+                    <div style={{ width: 22, height: 22, borderRadius: "50%", background: tema.primario }} />
+                    <div style={{ width: 22, height: 22, borderRadius: "50%", background: tema.acento }} />
+                    <div style={{ width: 22, height: 22, borderRadius: "50%", background: tema.secundario }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>{tema.nombre}</div>
+                    <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>{tema.primario}</div>
+                  </div>
+                  {temaActual.id === tema.id && <div style={{ marginLeft: "auto", fontSize: 18 }}>✅</div>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      <div style={{ background: t.primario, padding: "0 24px", position: "sticky", top: 0, zIndex: 100, boxShadow: `0 2px 12px ${t.primario}4D` }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", gap: 16 }}>
+          {/* ── MENÚ HAMBURGUESA ── */}
+          <div style={{ position: "relative" }}>
+            <button onClick={() => setMenuAbierto(!menuAbierto)} style={{ background: menuAbierto ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.12)", border: "none", borderRadius: 10, padding: "8px 12px", cursor: "pointer", color: "#fff", fontSize: 18, fontFamily: "inherit", transition: "background 0.2s" }}>☰</button>
+            {menuAbierto && (
+              <div style={{ position: "absolute", top: "calc(100% + 10px)", left: 0, width: 220, background: "#fff", borderRadius: 14, boxShadow: "0 8px 30px rgba(0,0,0,0.15)", border: "1px solid #E8EEF4", zIndex: 500, overflow: "hidden" }}>
+                <button onClick={() => { setVista("cuentas"); setMenuAbierto(false); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "13px 16px", background: vista === "cuentas" ? t.bg : "transparent", border: "none", cursor: "pointer", fontSize: 14, fontWeight: vista === "cuentas" ? 700 : 500, color: vista === "cuentas" ? t.primario : "#374151", fontFamily: "inherit", borderBottom: "1px solid #F3F4F6" }}>💳 Cuentas</button>
+                <button onClick={() => { setModalColores(true); setMenuAbierto(false); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "13px 16px", background: "transparent", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 500, color: "#374151", fontFamily: "inherit" }}>🎨 Personalizar Colores</button>
+              </div>
+            )}
+          </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 0" }}>
             <div style={{ background: "#fff", borderRadius: 10, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>👁</div>
             <span style={{ color: "#fff", fontWeight: 800, fontSize: 18, letterSpacing: 1 }}>OPTIMANAGER</span>
@@ -1407,7 +1502,7 @@ export default function OptiManager() {
               <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: "6px 10px", color: "#fff", fontSize: 12, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>Salir</button>
             </div>
             <button onClick={() => setModalConfig(true)} title="Configurar datos de impresión" style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: "6px 10px", color: "#fff", fontSize: 14, cursor: "pointer" }}>⚙️</button>
-            <Btn onClick={() => setModalNuevo(true)} style={{ background: "#fff", color: "#1D4ED8", fontWeight: 800, fontSize: 12, padding: "7px 14px" }}>+ Nuevo</Btn>
+            <Btn onClick={() => setModalNuevo(true)} style={{ background: "#fff", color: t.primario, fontWeight: 800, fontSize: 12, padding: "7px 14px" }}>+ Nuevo</Btn>
           </div>
         </div>
       </div>
