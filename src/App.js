@@ -26,7 +26,7 @@ const ESTADOS = {
 };
 
 const TIPOS_LENTE = ["Monofocal", "Bifocal", "Multifuncional"];
-const TIPOS_TRATAMIENTO = ["Rx Blancas","Rx Antirreflex","Blue Protec","Fotomático","Fotoblue","Digital"];
+const TIPOS_TRATAMIENTO = ["Blancas","Antirreflex","Blue Protec","Fotomatic","Fotoblue","Digital"];
 const METODOS_PAGO = ["Efectivo", "Yape", "Plin", "POS", "Transferencia"];
 const MATERIALES_LUNA = ["Resinas", "Cristal", "Policarbonato", "Resinas NK"];
 
