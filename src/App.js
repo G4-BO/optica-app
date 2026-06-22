@@ -57,7 +57,7 @@ function imprimirRecibo(p, config, atendidoPor) {
 
   // Descripción de lunas (sin medida/graduación)
   const descLunas = [
-    p.tipoLente,
+    p.tipoLente === "Monofocal" && p.distanciaMonofocal ? `${p.tipoLente} (${p.distanciaMonofocal})` : p.tipoLente,
     p.tratamiento === "Digital" ? `Digital - ${p.detalleTratamiento || ""}` : p.tratamiento,
     p.materialLuna || "",
   ].filter(Boolean).join(" / ") || "Lentes";
@@ -354,12 +354,19 @@ function SeccionCompra({ form, set }) {
       <div style={{ background: "#EFF6FF", borderRadius: 12, padding: 14 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: "#1D4ED8", marginBottom: 12 }}>🛍 Detalle del Pedido</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Select label="Tipo de Lente" value={form.tipoLente} onChange={e => set("tipoLente", e.target.value)}
+          <Select label="Tipo de Lente" value={form.tipoLente}
+            onChange={e => { set("tipoLente", e.target.value); if (e.target.value !== "Monofocal") set("distanciaMonofocal", ""); }}
             options={[{ value: "", label: "Seleccionar..." }, ...TIPOS_LENTE.map(t => ({ value: t, label: t }))]} />
           <Select label="Tratamiento" value={form.tratamiento}
             onChange={e => { set("tratamiento", e.target.value); if (e.target.value !== "Digital") set("detalleTratamiento", ""); }}
             options={[{ value: "", label: "Seleccionar..." }, ...TIPOS_TRATAMIENTO.map(t => ({ value: t, label: t }))]} />
         </div>
+        {form.tipoLente === "Monofocal" && (
+          <div style={{ marginTop: 12 }}>
+            <Select label="Lejos o Cerca *" value={form.distanciaMonofocal || ""} onChange={e => set("distanciaMonofocal", e.target.value)}
+              options={[{ value: "", label: "Seleccionar..." }, { value: "Lejos", label: "Lejos" }, { value: "Cerca", label: "Cerca" }]} />
+          </div>
+        )}
         {form.tratamiento === "Digital" && (
           <div style={{ marginTop: 12 }}>
             <Input label="Especificar tipo Digital *" value={form.detalleTratamiento}
@@ -636,7 +643,7 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [], c
   const [form, setForm] = useState({
     dni: "", nombre: "", apellidos: "", telefono: "",
     sucursal: sucursalActual,
-    tipoLente: "", tratamiento: "", detalleTratamiento: "", montura: "", materialLuna: "",
+    tipoLente: "", tratamiento: "", detalleTratamiento: "", distanciaMonofocal: "", montura: "", materialLuna: "",
     precioLunas: "", precioMontura: "",
     total: "", adelanto: "", metodoPago: "Efectivo",
     graduacion: graduacionVacia(), fecha: today(), fechaEntrega: "", horaEntrega: "19:00", observaciones: "",
@@ -677,10 +684,11 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [], c
   const guardar = () => {
     const nombreCompleto = `${form.nombre} ${form.apellidos}`.trim();
     if (!nombreCompleto || !form.total || !form.adelanto) return alert("Completa nombre, total y adelanto.");
+    if (form.tipoLente === "Monofocal" && !form.distanciaMonofocal) return alert("Para lentes Monofocal debes indicar si es Lejos o Cerca.");
     const nuevo = {
       id: Date.now(), dni: form.dni, nombre: nombreCompleto, telefono: form.telefono, sucursal: form.sucursal,
       fecha: form.fecha, fechaEntrega: form.fechaEntrega, horaEntrega: form.horaEntrega || "19:00", tipoLente: form.tipoLente, tratamiento: form.tratamiento,
-      detalleTratamiento: form.detalleTratamiento, montura: form.montura, materialLuna: form.materialLuna,
+      detalleTratamiento: form.detalleTratamiento, distanciaMonofocal: form.tipoLente === "Monofocal" ? form.distanciaMonofocal : "", montura: form.montura, materialLuna: form.materialLuna,
       precioLunas: parseFloat(form.precioLunas) || 0,
       precioMontura: parseFloat(form.precioMontura) || 0,
       observaciones: form.observaciones, total: parseFloat(form.total), graduacion: form.graduacion,
@@ -805,7 +813,10 @@ function ModalDetalle({ paciente, onClose, onUpdate, onEliminar, esJefe, configu
   const abonado = totalAbonado(p);
   const setField = (k, v) => setP(prev => ({ ...prev, [k]: v }));
   const cambiarEstado = (nuevoEstado) => { setP({ ...p, estado: nuevoEstado }); if (nuevoEstado === "LISTO") setWhatsappSent(false); };
-  const guardarEdicion = () => { onUpdate(p); setModoEditar(false); };
+  const guardarEdicion = () => {
+    if (p.tipoLente === "Monofocal" && !p.distanciaMonofocal) return alert("Para lentes Monofocal debes indicar si es Lejos o Cerca.");
+    onUpdate(p); setModoEditar(false);
+  };
   const agregarAbono = () => {
     const monto = parseFloat(nuevoAbono);
     if (!monto || monto <= 0) return alert("Ingresa un monto válido");
@@ -816,7 +827,7 @@ function ModalDetalle({ paciente, onClose, onUpdate, onEliminar, esJefe, configu
   const enviarWhatsApp = () => { abrirWhatsApp(p); setWhatsappSent(true); };
   const porcentaje = Math.min((abonado / p.total) * 100, 100);
   const estadoCambiado = p.estado !== paciente.estado;
-  const descripcionCompra = [p.tipoLente, p.tratamiento === "Digital" ? `Digital - ${p.detalleTratamiento}` : p.tratamiento, p.materialLuna && `Luna: ${p.materialLuna}`, p.montura && `Montura: ${p.montura}`].filter(Boolean).join(" · ");
+  const descripcionCompra = [p.tipoLente === "Monofocal" && p.distanciaMonofocal ? `${p.tipoLente} (${p.distanciaMonofocal})` : p.tipoLente, p.tratamiento === "Digital" ? `Digital - ${p.detalleTratamiento}` : p.tratamiento, p.materialLuna && `Luna: ${p.materialLuna}`, p.montura && `Montura: ${p.montura}`].filter(Boolean).join(" · ");
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
