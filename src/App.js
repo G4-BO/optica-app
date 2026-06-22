@@ -972,16 +972,61 @@ function ModalDetalle({ paciente, onClose, onUpdate, onEliminar, esJefe, configu
   );
 }
 
-function Dashboard({ pacientes }) {
+function Dashboard({ pacientes, sucursalFiltro }) {
   const hoy = today();
+  const filtrados = sucursalFiltro === "Todas" ? pacientes : pacientes.filter(p => p.sucursal === sucursalFiltro);
   const ingresosHoy = pacientes.flatMap(p => p.abonos.filter(a => a.fecha === hoy)).reduce((s, a) => s + a.monto, 0);
   const pendientes = pacientes.filter(p => saldoPendiente(p) > 0 && p.estado !== "RECOGIDO");
   const totalPendiente = pendientes.reduce((s, p) => s + saldoPendiente(p), 0);
-  const listos = pacientes.filter(p => p.estado === "LISTO");
-  const enLab = pacientes.filter(p => p.estado === "EN_LABORATORIO");
+  const listos = filtrados.filter(p => p.estado === "LISTO");
+  const enLab = filtrados.filter(p => p.estado === "EN_LABORATORIO");
+  const realizaron = filtrados.filter(p => p.estado === "PEDIDO");
+  const entregados = filtrados.filter(p => p.estado === "RECOGIDO");
   const porSucursal = SUCURSALES.map(s => ({ nombre: s, total: pacientes.filter(p => p.sucursal === s).flatMap(p => p.abonos).reduce((s, a) => s + a.monto, 0), pacientes: pacientes.filter(p => p.sucursal === s).length }));
-  const ingresosPorMetodo = METODOS_PAGO.map(m => ({ metodo: m, total: pacientes.flatMap(p => p.abonos.filter(a => a.fecha === hoy && a.metodo === m)).reduce((s, a) => s + a.monto, 0) })).filter(m => m.total > 0);
-  const coloresPago = { "Efectivo": { bg: "#F0FDF4", label: "#166534", value: "#16A34A" }, "Yape": { bg: "#F5F3FF", label: "#6B21A8", value: "#7C3AED" }, "Plin": { bg: "#E0F2FE", label: "#0369A1", value: "#0284C7" }, "POS": { bg: "#EFF6FF", label: "#1E40AF", value: "#1D4ED8" }, "Transferencia": { bg: "#EFF6FF", label: "#1E40AF", value: "#1D4ED8" } };
+
+  const HORARIOS = {
+    "Óptica La Huayrona": "Lun–Sáb: 9:00am – 8:00pm / Dom: 10:00am – 6:00pm",
+    "Óptica El Muro":     "Lun–Sáb: 9:00am – 8:00pm / Dom: 10:00am – 6:00pm",
+  };
+
+  const msgListo = (p) => {
+    const horario = HORARIOS[p.sucursal] || "consultar horario";
+    return `Hola ${p.nombre.split(" ")[0]} 👋, le informamos que su trabajo óptico ya está *listo para recoger* 🎉.\n\nPuede pasar a recogerlo en: *${p.sucursal}*\n🕐 Horarios: ${horario}\n\nLo esperamos 😊`;
+  };
+
+  const msgEntregado = (p) => {
+    return `Hola ${p.nombre.split(" ")[0]} 😊, queríamos agradecerle por confiar en nosotros ✨.\n\nEsperamos que sus lentes sean de su agrado. Recuerde que ante cualquier consulta o ajuste, estamos siempre a su disposición en *${p.sucursal}* 🏪.\n\n¡Gracias por su compra y hasta pronto! 🙏`;
+  };
+
+  const abrirWA = (p, msg) => {
+    const tel = (p.telefono || "").replace(/\D/g, "");
+    if (!tel) return alert("Este paciente no tiene número de teléfono registrado.");
+    const num = tel.startsWith("51") ? tel : `51${tel}`;
+    window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, "_blank");
+  };
+
+  const ColKanban = ({ titulo, color, bg, border, icon, items, renderBtn }) => (
+    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+      <div style={{ background: bg, border: `2px solid ${border}`, borderRadius: "14px 14px 0 0", padding: "12px 16px", display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ fontSize: 18 }}>{icon}</span>
+        <span style={{ fontWeight: 800, fontSize: 14, color }}>{titulo}</span>
+        <span style={{ marginLeft: "auto", background: color, color: "#fff", borderRadius: 99, fontSize: 12, fontWeight: 800, padding: "2px 10px" }}>{items.length}</span>
+      </div>
+      <div style={{ background: "#FAFAFA", border: `2px solid ${border}`, borderTop: "none", borderRadius: "0 0 14px 14px", padding: 10, display: "flex", flexDirection: "column", gap: 8, minHeight: 120 }}>
+        {items.length === 0
+          ? <div style={{ textAlign: "center", color: "#9CA3AF", fontSize: 12, padding: "20px 0" }}>Sin pacientes</div>
+          : items.map(p => (
+            <div key={p.id} style={{ background: "#fff", borderRadius: 10, padding: "10px 12px", border: `1px solid ${border}`, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+              <div style={{ fontWeight: 700, fontSize: 13, color: "#111827", marginBottom: 2 }}>{p.nombre}</div>
+              <div style={{ fontSize: 11, color: "#6B7280", marginBottom: p.telefono ? 8 : 0 }}>{p.sucursal.replace("Óptica ", "🏪 ")} · {fmt(saldoPendiente(p))} saldo</div>
+              {renderBtn && p.telefono && renderBtn(p)}
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
@@ -1001,27 +1046,36 @@ function Dashboard({ pacientes }) {
           </Card>
         ))}
       </div>
-      {ingresosPorMetodo.length > 0 && (
-        <Card>
-          <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 14 }}>💳 Ingresos de Hoy por Método de Pago</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-            {ingresosPorMetodo.map(m => { const c = coloresPago[m.metodo] || { bg: "#F3F4F6", label: "#374151", value: "#111827" }; return <div key={m.metodo} style={{ background: c.bg, borderRadius: 10, padding: "10px 16px", textAlign: "center", minWidth: 110, border: `1.5px solid ${c.value}30` }}><div style={{ fontSize: 11, color: c.label, fontWeight: 700 }}>{m.metodo.toUpperCase()}</div><div style={{ fontSize: 18, fontWeight: 800, color: c.value }}>{fmt(m.total)}</div></div>; })}
-          </div>
-        </Card>
-      )}
-      {listos.length > 0 && (
-        <Card>
-          <div style={{ fontWeight: 700, fontSize: 15, color: "#10B981", marginBottom: 14 }}>🔔 Pacientes listos para entregar</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {listos.map(p => (
-              <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#F0FDF4", borderRadius: 10, padding: "10px 14px" }}>
-                <div><div style={{ fontWeight: 700, fontSize: 14, color: "#111827" }}>{p.nombre}</div><div style={{ fontSize: 12, color: "#6B7280" }}>{p.sucursal} · Saldo: {fmt(saldoPendiente(p))}</div></div>
-                {p.telefono && <button onClick={() => abrirWhatsApp(p)} style={{ background: "#25D366", color: "#fff", borderRadius: 8, padding: "6px 14px", fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer" }}>📱 WhatsApp</button>}
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
+
+      {/* ── 3 COLUMNAS KANBAN ── */}
+      <div>
+        <div style={{ fontWeight: 800, fontSize: 15, color: "#111827", marginBottom: 14 }}>📋 Estado de Pedidos</div>
+        <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+          <ColKanban
+            titulo="Realizó Compra" icon="🛍️" color="#1D4ED8" bg="#EFF6FF" border="#BFDBFE"
+            items={realizaron}
+            renderBtn={null}
+          />
+          <ColKanban
+            titulo="Listo para Entregar" icon="✅" color="#059669" bg="#ECFDF5" border="#6EE7B7"
+            items={listos}
+            renderBtn={(p) => (
+              <button onClick={() => abrirWA(p, msgListo(p))} style={{ display: "flex", alignItems: "center", gap: 6, background: "#25D366", color: "#fff", border: "none", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                📱 Avisar por WhatsApp
+              </button>
+            )}
+          />
+          <ColKanban
+            titulo="Entregados" icon="🎉" color="#7C3AED" bg="#F5F3FF" border="#C4B5FD"
+            items={entregados}
+            renderBtn={(p) => (
+              <button onClick={() => abrirWA(p, msgEntregado(p))} style={{ display: "flex", alignItems: "center", gap: 6, background: "#7C3AED", color: "#fff", border: "none", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                💜 Enviar agradecimiento
+              </button>
+            )}
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -1595,7 +1649,7 @@ export default function OptiManager() {
               </div>
             )}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 0" }}> 
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 0" }}>
             <div style={{ background: "#fff", borderRadius: 10, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>👁</div>
             <span style={{ color: "#fff", fontWeight: 800, fontSize: 18, letterSpacing: 1 }}>OPTIMANAGER</span>
           </div>
@@ -1621,7 +1675,7 @@ export default function OptiManager() {
         </div>
       </div>
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 20px" }}>
-        {vista === "dashboard" && <Dashboard pacientes={pacientes.filter(p => sucursalFiltro === "Todas" || p.sucursal === sucursalFiltro)} />}
+        {vista === "dashboard" && <Dashboard pacientes={pacientes.filter(p => sucursalFiltro === "Todas" || p.sucursal === sucursalFiltro)} sucursalFiltro={sucursalFiltro} />}
         {vista === "pacientes" && <Pacientes pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} sucursalFiltro={sucursalFiltro} esJefe={esJefe} configuraciones={configuraciones} atendidoPor={usuarioActual?.nombre || usuarioActual?.username} />}
         {vista === "directorio" && <Directorio pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} esJefe={esJefe} configuraciones={configuraciones} atendidoPor={usuarioActual?.nombre || usuarioActual?.username} />}
         {vista === "cuentas" && <Cuentas pacientes={pacientes} sucursalFiltro={sucursalFiltro} />}
