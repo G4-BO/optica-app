@@ -1377,7 +1377,7 @@ function ModalConfiguracionImpresion({ sucursal, config, onSave, onClose }) {
 }
 
 const TEMAS_COLOR = [
-  { id: "azul", nombre: "Azul Clásico", primario: "#1D4ED8", secundario: "#1e3a8a", acento: "#3B82F6", bg: "#EFF6FF" },
+  { id: "oscuro", nombre: "Negro & Gris", primario: "#111827", secundario: "#1F2937", acento: "#374151", bg: "#F3F4F6" },
 ];
 
 function ModalPersonalizarColores({ temaActual, onAplicar, onClose, generarCombinaciones }) {
@@ -1564,7 +1564,7 @@ export default function OptiManager() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: t.bg.replace("FF", "F1"), fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}>
+    <div style={{ minHeight: "100vh", background: "#F3F4F6", fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}>
 
       {/* ── OVERLAY cierra menú al hacer click fuera ── */}
       {menuAbierto && <div onClick={() => setMenuAbierto(false)} style={{ position: "fixed", inset: 0, zIndex: 150 }} />}
@@ -1595,7 +1595,7 @@ export default function OptiManager() {
               </div>
             )}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 0" }}> 
             <div style={{ background: "#fff", borderRadius: 10, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>👁</div>
             <span style={{ color: "#fff", fontWeight: 800, fontSize: 18, letterSpacing: 1 }}>OPTIMANAGER</span>
           </div>
