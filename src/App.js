@@ -972,9 +972,9 @@ function ModalDetalle({ paciente, onClose, onUpdate, onEliminar, esJefe, configu
   );
 }
 
-function Dashboard({ pacientes, sucursalFiltro }) {
+function Dashboard({ pacientes, sedeActual }) {
   const hoy = today();
-  const filtrados = sucursalFiltro === "Todas" ? pacientes : pacientes.filter(p => p.sucursal === sucursalFiltro);
+  const filtrados = pacientes;
   const ingresosHoy = pacientes.flatMap(p => p.abonos.filter(a => a.fecha === hoy)).reduce((s, a) => s + a.monto, 0);
   const pendientes = pacientes.filter(p => saldoPendiente(p) > 0 && p.estado !== "RECOGIDO");
   const totalPendiente = pendientes.reduce((s, p) => s + saldoPendiente(p), 0);
@@ -982,7 +982,13 @@ function Dashboard({ pacientes, sucursalFiltro }) {
   const enLab = filtrados.filter(p => p.estado === "EN_LABORATORIO");
   const realizaron = filtrados.filter(p => p.estado === "PEDIDO");
   const entregados = filtrados.filter(p => p.estado === "RECOGIDO");
-  const porSucursal = SUCURSALES.map(s => ({ nombre: s, total: pacientes.filter(p => p.sucursal === s).flatMap(p => p.abonos).reduce((s, a) => s + a.monto, 0), pacientes: pacientes.filter(p => p.sucursal === s).length }));
+
+  // ── Resumen de caja de la sucursal (solo la sede en la que se inició sesión) ──
+  const totalRecaudadoSede = pacientes.flatMap(p => p.abonos || []).reduce((s, a) => s + a.monto, 0);
+  const abonosHoy = pacientes.flatMap(p => (p.abonos || []).filter(a => a.fecha === hoy));
+  const ventasHoySede = abonosHoy.reduce((s, a) => s + a.monto, 0);
+  const ICONOS_METODO = { "Efectivo": "💵", "Yape": "📱", "Plin": "💙", "POS": "💳", "Transferencia": "🏦" };
+  const porMetodo = METODOS_PAGO.map(m => ({ metodo: m, monto: abonosHoy.filter(a => a.metodo === m).reduce((s, a) => s + a.monto, 0) }));
 
   const HORARIOS = {
     "Óptica La Huayrona": "Lun–Sáb: 9:00am – 8:00pm / Dom: 10:00am – 6:00pm",
@@ -1035,17 +1041,24 @@ function Dashboard({ pacientes, sucursalFiltro }) {
         <StatCard label="Listos p/ Entregar" value={listos.length} sub="notificar pacientes" color="#10B981" icon="✅" />
         <StatCard label="En Laboratorio" value={enLab.length} sub="en proceso" color="#F59E0B" icon="🔬" />
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        {porSucursal.map(s => (
-          <Card key={s.nombre}>
-            <div style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 14 }}>{s.nombre}</div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <div><div style={{ fontSize: 11, color: "#6B7280" }}>TOTAL RECAUDADO</div><div style={{ fontSize: 22, fontWeight: 800, color: "#1D4ED8" }}>{fmt(s.total)}</div></div>
-              <div style={{ textAlign: "right" }}><div style={{ fontSize: 11, color: "#6B7280" }}>PACIENTES</div><div style={{ fontSize: 22, fontWeight: 800, color: "#374151" }}>{s.pacientes}</div></div>
+      <Card>
+        <div style={{ fontWeight: 700, fontSize: 16, color: "#111827", marginBottom: 2 }}>🏪 {sedeActual}</div>
+        <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>Resumen de caja de esta sucursal</div>
+        <div style={{ display: "flex", gap: 28, flexWrap: "wrap", marginBottom: 18 }}>
+          <div><div style={{ fontSize: 11, color: "#6B7280" }}>TOTAL RECAUDADO</div><div style={{ fontSize: 22, fontWeight: 800, color: "#1D4ED8" }}>{fmt(totalRecaudadoSede)}</div></div>
+          <div><div style={{ fontSize: 11, color: "#6B7280" }}>PACIENTES</div><div style={{ fontSize: 22, fontWeight: 800, color: "#374151" }}>{pacientes.length}</div></div>
+          <div><div style={{ fontSize: 11, color: "#6B7280" }}>VENTAS DE HOY</div><div style={{ fontSize: 22, fontWeight: 800, color: "#059669" }}>{fmt(ventasHoySede)}</div></div>
+        </div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#9CA3AF", marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>Ingresos de hoy por método de pago</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
+          {porMetodo.map(pm => (
+            <div key={pm.metodo} style={{ background: "#F9FAFB", borderRadius: 10, padding: "10px 12px", border: "1px solid #F3F4F6" }}>
+              <div style={{ fontSize: 11, color: "#6B7280" }}>{ICONOS_METODO[pm.metodo] || "💰"} {pm.metodo === "POS" ? "Tarjeta" : pm.metodo}</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "#111827" }}>{fmt(pm.monto)}</div>
             </div>
-          </Card>
-        ))}
-      </div>
+          ))}
+        </div>
+      </Card>
 
       {/* ── 3 COLUMNAS KANBAN ── */}
       <div>
@@ -1675,7 +1688,7 @@ export default function OptiManager() {
         </div>
       </div>
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 20px" }}>
-        {vista === "dashboard" && <Dashboard pacientes={pacientes.filter(p => sucursalFiltro === "Todas" || p.sucursal === sucursalFiltro)} sucursalFiltro={sucursalFiltro} />}
+        {vista === "dashboard" && <Dashboard pacientes={pacientes.filter(p => p.sucursal === sedeActual)} sedeActual={sedeActual} />}
         {vista === "pacientes" && <Pacientes pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} sucursalFiltro={sucursalFiltro} esJefe={esJefe} configuraciones={configuraciones} atendidoPor={usuarioActual?.nombre || usuarioActual?.username} />}
         {vista === "directorio" && <Directorio pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} esJefe={esJefe} configuraciones={configuraciones} atendidoPor={usuarioActual?.nombre || usuarioActual?.username} />}
         {vista === "cuentas" && <Cuentas pacientes={pacientes} sucursalFiltro={sucursalFiltro} />}
