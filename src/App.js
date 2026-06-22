@@ -1298,10 +1298,30 @@ function Movimientos({ movimientos, onAdd, sucursalFiltro }) {
   );
 }
 
-function Reporte({ pacientes, movimientos, sucursalFiltro, esJefe, onAnularVenta }) {
+function Reporte({ pacientes, movimientos, sucursalFiltro, esJefe, onAnularVenta, atendidoPor }) {
   const [fechaReporte, setFechaReporte] = useState(today());
   const [sucursalReporte, setSucursalReporte] = useState(sucursalFiltro !== "Todas" ? sucursalFiltro : SUCURSALES[0]);
   const [anularId, setAnularId] = useState(null);
+  const [cajaInfo, setCajaInfo] = useState(null);
+  const [modalApertura, setModalApertura] = useState(false);
+  const [modalCierre, setModalCierre] = useState(false);
+  const [montoApertura, setMontoApertura] = useState("");
+  const [montoContado, setMontoContado] = useState("");
+  const idCaja = `${sucursalReporte}_${fechaReporte}`;
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, "cajas", idCaja), (snap) => { setCajaInfo(snap.exists() ? snap.data() : null); });
+    return () => unsub();
+  }, [idCaja]);
+  const guardarApertura = async () => {
+    if (!montoApertura) return alert("Ingresa el monto de apertura.");
+    await setDoc(doc(db, "cajas", idCaja), {
+      sucursal: sucursalReporte, fecha: fechaReporte, montoApertura: parseFloat(montoApertura) || 0,
+      horaApertura: new Date().toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" }),
+      usuarioApertura: atendidoPor || "",
+    }, { merge: true });
+    setModalApertura(false); setMontoApertura("");
+  };
+
   const pacientesSucursal = pacientes.filter(p => p.sucursal === sucursalReporte);
   const ventasDia = pacientesSucursal.filter(p => p.fecha === fechaReporte);
   const abonosDia = pacientesSucursal.flatMap(p => p.abonos.filter(a => a.fecha === fechaReporte).map(a => ({ ...a, paciente: p.nombre })));
@@ -1317,6 +1337,19 @@ function Reporte({ pacientes, movimientos, sucursalFiltro, esJefe, onAnularVenta
   const ingresosExtraEfectivo = ingresosMov.filter(m => m.metodo === "Efectivo").reduce((s, m) => s + m.monto, 0);
   const gastosEfectivo = gastosDia.filter(m => m.metodo === "Efectivo").reduce((s, m) => s + m.monto, 0);
   const efectivoEnCaja = abonosEfectivo + ingresosExtraEfectivo - gastosEfectivo;
+  const montoAperturaActual = cajaInfo?.montoApertura || 0;
+  const efectivoEsperado = montoAperturaActual + efectivoEnCaja;
+  const guardarCierre = async () => {
+    if (!montoContado) return alert("Ingresa el monto contado.");
+    const diferencia = (parseFloat(montoContado) || 0) - efectivoEsperado;
+    await setDoc(doc(db, "cajas", idCaja), {
+      sucursal: sucursalReporte, fecha: fechaReporte,
+      montoCierre: parseFloat(montoContado) || 0, efectivoEsperado, diferencia,
+      horaCierre: new Date().toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" }),
+      usuarioCierre: atendidoPor || "",
+    }, { merge: true });
+    setModalCierre(false); setMontoContado("");
+  };
   const metodoConfig = { "Efectivo": { icon: "💵", bg: "#F0FDF4", border: "#86EFAC", color: "#166534", valColor: "#16A34A", totalColor: "#16A34A" }, "Yape": { icon: "📱", bg: "#F5F3FF", border: "#C4B5FD", color: "#6B21A8", valColor: "#7C3AED", totalColor: "#7C3AED" }, "Plin": { icon: "💙", bg: "#E0F2FE", border: "#7DD3FC", color: "#0369A1", valColor: "#0284C7", totalColor: "#0284C7" }, "POS": { icon: "💳", bg: "#EFF6FF", border: "#93C5FD", color: "#1E40AF", valColor: "#1D4ED8", totalColor: "#1D4ED8" }, "Transferencia": { icon: "🏦", bg: "#F0F9FF", border: "#BAE6FD", color: "#075985", valColor: "#0369A1", totalColor: "#0369A1" } };
   const cuadrePorMetodo = METODOS_PAGO.map(m => { const abonos = abonosDia.filter(a => a.metodo === m).reduce((s, a) => s + a.monto, 0); const extras = ingresosMov.filter(x => x.metodo === m).reduce((s, x) => s + x.monto, 0); const gastos = gastosDia.filter(x => x.metodo === m).reduce((s, x) => s + x.monto, 0); return { metodo: m, abonos, extras, gastos, total: abonos + extras - gastos }; }).filter(x => x.abonos > 0 || x.extras > 0 || x.gastos > 0);
   const metodoColor = { "Efectivo": { bg: "#F0FDF4", color: "#16A34A", border: "#86EFAC" }, "Yape": { bg: "#F5F3FF", color: "#7C3AED", border: "#C4B5FD" }, "Plin": { bg: "#E0F2FE", color: "#0284C7", border: "#7DD3FC" }, "POS": { bg: "#EFF6FF", color: "#1D4ED8", border: "#93C5FD" }, "Transferencia": { bg: "#EFF6FF", color: "#1D4ED8", border: "#93C5FD" } };
@@ -1330,6 +1363,10 @@ function Reporte({ pacientes, movimientos, sucursalFiltro, esJefe, onAnularVenta
           <div style={{ display: "flex", gap: 6 }}>{SUCURSALES.map(s => <button key={s} onClick={() => setSucursalReporte(s)} style={{ padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700, border: `2px solid ${sucursalReporte === s ? "#1D4ED8" : "#E5E7EB"}`, background: sucursalReporte === s ? "#EFF6FF" : "#fff", color: sucursalReporte === s ? "#1D4ED8" : "#6B7280", cursor: "pointer", fontFamily: "inherit" }}>🏪 {s.replace("Óptica ", "")}</button>)}</div>
           <input type="date" value={fechaReporte} onChange={e => setFechaReporte(e.target.value)} style={{ border: "1.5px solid #D1D5DB", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontFamily: "inherit", background: "#FAFAFA", outline: "none" }} />
           <button onClick={() => setFechaReporte(today())} style={{ background: "#F3F4F6", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: "pointer", fontFamily: "inherit" }}>Hoy</button>
+          <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+            <Btn variant="ghost" onClick={() => { setMontoApertura(cajaInfo?.montoApertura ?? ""); setModalApertura(true); }} style={{ fontSize: 12, padding: "7px 14px" }}>🔓 Aperturar Caja</Btn>
+            <Btn variant="ghost" onClick={() => setModalCierre(true)} style={{ fontSize: 12, padding: "7px 14px" }}>🔒 Cierre de Caja</Btn>
+          </div>
         </div>
       </Card>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
@@ -1389,6 +1426,33 @@ function Reporte({ pacientes, movimientos, sucursalFiltro, esJefe, onAnularVenta
         </div>
       )}
       <Card style={{ padding: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 13, color: "#374151", marginBottom: 8 }}>🔓 Apertura de Caja</div>
+        {cajaInfo?.montoApertura !== undefined ? (
+          <div style={{ fontSize: 13, color: "#374151" }}>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <span>Monto inicial:</span>
+              <strong style={{ color: "#1D4ED8" }}>{fmt(cajaInfo.montoApertura)}</strong>
+            </div>
+            <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 3 }}>
+              Aperturada a las {cajaInfo.horaApertura || "—"}{cajaInfo.usuarioApertura && ` por ${cajaInfo.usuarioApertura}`}
+            </div>
+            {cajaInfo.montoCierre !== undefined && (
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #F3F4F6" }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>Cerrada con:</span>
+                  <strong>{fmt(cajaInfo.montoCierre)}</strong>
+                </div>
+                <div style={{ fontSize: 11, marginTop: 3, color: cajaInfo.diferencia === 0 ? "#059669" : (cajaInfo.diferencia > 0 ? "#059669" : "#DC2626"), fontWeight: 700 }}>
+                  {cajaInfo.diferencia === 0 ? "✓ Caja exacta" : cajaInfo.diferencia > 0 ? `Sobran ${fmt(cajaInfo.diferencia)}` : `Faltan ${fmt(Math.abs(cajaInfo.diferencia))}`}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ textAlign: "center", color: "#9CA3AF", fontSize: 12, padding: 10 }}>⚠️ No se ha aperturado caja este día</div>
+        )}
+      </Card>
+      <Card style={{ padding: 14 }}>
         <div style={{ fontWeight: 800, fontSize: 13, color: "#059669", marginBottom: 8 }}>💳 Cobros del Día ({abonosDia.length})</div>
         {abonosDia.length === 0 ? <div style={{ textAlign: "center", color: "#9CA3AF", fontSize: 12, padding: 10 }}>Sin abonos este día</div> : (
           <div>
@@ -1418,6 +1482,37 @@ function Reporte({ pacientes, movimientos, sucursalFiltro, esJefe, onAnularVenta
           <div style={{ fontSize: 22, fontWeight: 900, color: "#fff" }}>{fmt(totalNeto)}</div>
         </div>
       </Card>
+      {modalApertura && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1500, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <Card style={{ width: "100%", maxWidth: 380 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#111827", marginBottom: 4 }}>🔓 Apertura de Caja</div>
+            <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 14 }}>{sucursalReporte} · {fechaReporte}</div>
+            <Input label="Monto inicial en efectivo (S/)" type="number" value={montoApertura} onChange={e => setMontoApertura(e.target.value)} placeholder="0.00" />
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 18 }}>
+              <Btn variant="ghost" onClick={() => setModalApertura(false)}>Cancelar</Btn>
+              <Btn onClick={guardarApertura}>✓ Guardar Apertura</Btn>
+            </div>
+          </Card>
+        </div>
+      )}
+      {modalCierre && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1500, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <Card style={{ width: "100%", maxWidth: 420 }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#111827", marginBottom: 4 }}>🔒 Cierre de Caja</div>
+            <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 14 }}>{sucursalReporte} · {fechaReporte}</div>
+            <div style={{ background: "#F9FAFB", borderRadius: 10, padding: 12, marginBottom: 14, fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><span>Monto de apertura:</span><strong>{fmt(montoAperturaActual)}</strong></div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}><span>+ Cobros en efectivo:</span><strong>{fmt(efectivoEnCaja)}</strong></div>
+              <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid #E5E7EB", marginTop: 4, paddingTop: 6 }}><span>= Efectivo esperado:</span><strong style={{ color: "#1D4ED8" }}>{fmt(efectivoEsperado)}</strong></div>
+            </div>
+            <Input label="Monto contado físicamente (S/)" type="number" value={montoContado} onChange={e => setMontoContado(e.target.value)} placeholder="0.00" />
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 18 }}>
+              <Btn variant="ghost" onClick={() => setModalCierre(false)}>Cancelar</Btn>
+              <Btn variant="success" onClick={guardarCierre}>✓ Guardar Cierre</Btn>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
@@ -1704,7 +1799,7 @@ export default function OptiManager() {
         {vista === "directorio" && <Directorio pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} esJefe={esJefe} configuraciones={configuraciones} atendidoPor={usuarioActual?.nombre || usuarioActual?.username} />}
         {vista === "cuentas" && <Cuentas pacientes={pacientes} sucursalFiltro={sucursalFiltro} />}
         {vista === "movimientos" && <Movimientos movimientos={movimientos} onAdd={addMovimiento} sucursalFiltro={sucursalFiltro} />}
-        {vista === "reporte" && <Reporte pacientes={pacientes.filter(p => sucursalFiltro === "Todas" || p.sucursal === sucursalFiltro)} movimientos={movimientos} sucursalFiltro={sucursalFiltro} esJefe={esJefe} onAnularVenta={anularVenta} />}
+        {vista === "reporte" && <Reporte pacientes={pacientes.filter(p => sucursalFiltro === "Todas" || p.sucursal === sucursalFiltro)} movimientos={movimientos} sucursalFiltro={sucursalFiltro} esJefe={esJefe} onAnularVenta={anularVenta} atendidoPor={usuarioActual?.nombre || usuarioActual?.username} />}
       </div>
       {modalNuevo && <ModalNuevoPaciente onClose={() => setModalNuevo(false)} onSave={addPaciente} sucursalActual={sedeActual} pacientes={pacientes} configuraciones={configuraciones} atendidoPor={usuarioActual?.nombre || usuarioActual?.username} />}
       {modalConfig && <ModalConfiguracionImpresion sucursal={sedeActual} config={configuraciones[sedeActual]} onSave={guardarConfigSucursal} onClose={() => setModalConfig(false)} />}
