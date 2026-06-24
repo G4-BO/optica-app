@@ -919,7 +919,7 @@ function ModalDetalle({ paciente, onClose, onUpdate, onEliminar, esJefe, configu
             </div>
             <div style={{ background: "#F0FDF4", borderRadius: 12, padding: 14 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: "#059669", marginBottom: 10 }}>💰 Precios</div>
-              <div className="form-grid-3" style{{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+              <div className="form-grid-3" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
                 <Input label="Precio Lunas (S/)" type="number" value={p.precioLunas || ""}
                   onChange={e => { const l = parseFloat(e.target.value)||0; const m = parseFloat(p.precioMontura)||0; setField("precioLunas", e.target.value); setField("total", l + m); }} placeholder="0.00" />
                 <Input label="Precio Montura (S/)" type="number" value={p.precioMontura || ""}
