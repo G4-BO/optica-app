@@ -3,6 +3,44 @@ import emailjs from '@emailjs/browser';
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, setDoc } from "firebase/firestore";
 
+// ─── RESPONSIVE HOOK ────────────────────────────────────────────────
+function useResponsive() {
+  const [w, setW] = useState(window.innerWidth);
+  useEffect(() => { const h = () => setW(window.innerWidth); window.addEventListener("resize", h); return () => window.removeEventListener("resize", h); }, []);
+  return { isMobile: w < 640, isTablet: w >= 640 && w < 1024, isDesktop: w >= 1024, w };
+}
+
+// ─── GLOBAL RESPONSIVE STYLES ───────────────────────────────────────
+const responsiveStyle = document.createElement("style");
+responsiveStyle.textContent = `
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #F1F5F9; }
+  ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+  .kanban-cols { display: flex; gap: 14px; align-items: flex-start; }
+  @media (max-width: 639px) {
+    .kanban-cols { flex-direction: column; }
+    .stat-grid { grid-template-columns: 1fr 1fr !important; }
+    .form-grid-3 { grid-template-columns: 1fr !important; }
+    .form-grid-2 { grid-template-columns: 1fr !important; }
+    .modal-inner { width: 100% !important; max-width: 100% !important; border-radius: 16px 16px 0 0 !important; margin-top: auto !important; }
+    .modal-wrap { align-items: flex-end !important; padding: 0 !important; }
+    .sede-grid { grid-template-columns: 1fr !important; }
+    .metodo-grid { flex-wrap: wrap; }
+    .nav-desktop { display: none !important; }
+    .nav-right-desktop { display: none !important; }
+    .nav-mobile-bar { display: flex !important; }
+  }
+  @media (min-width: 640px) {
+    .nav-mobile-bar { display: none !important; }
+  }
+  @media (max-width: 1023px) {
+    .nav-label { display: none; }
+  }
+`;
+if (!document.head.querySelector("#opti-responsive")) { responsiveStyle.id = "opti-responsive"; document.head.appendChild(responsiveStyle); }
+
 // ─── FIREBASE CONFIG ────────────────────────────────────────────────
 const firebaseConfig = {
   apiKey: "AIzaSyAYZI76vPTa3vSVjdqFGkTyl_4hTjY2SoM",
@@ -236,14 +274,14 @@ function Card({ children, style = {}, onClick }) {
 
 function StatCard({ label, value, sub, color = "#1D4ED8", icon }) {
   return (
-    <Card style={{ flex: 1, minWidth: 160 }}>
+    <Card style={{ flex: 1, minWidth: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div>
-          <div style={{ fontSize: 12, color: "#6B7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
-          <div style={{ fontSize: 26, fontWeight: 800, color, marginTop: 6 }}>{value}</div>
-          {sub && <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 2 }}>{sub}</div>}
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 11, color: "#6B7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color, marginTop: 6 }}>{value}</div>
+          {sub && <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>{sub}</div>}
         </div>
-        <div style={{ fontSize: 24, opacity: 0.15 }}>{icon}</div>
+        <div style={{ fontSize: 22, opacity: 0.15, flexShrink: 0 }}>{icon}</div>
       </div>
     </Card>
   );
@@ -708,7 +746,7 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [], c
   };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+    <div className="modal-wrap" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       {pacienteExistente && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           <div style={{ background: "#fff", borderRadius: 16, padding: 28, maxWidth: 380, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
@@ -725,7 +763,7 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [], c
           </div>
         </div>
       )}
-      <Card style={{ width: "100%", maxWidth: 620, maxHeight: "92vh", overflowY: "auto" }}>
+      <Card className="modal-inner" style={{ width: "100%", maxWidth: 620, maxHeight: "92vh", overflowY: "auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800, color: "#111827" }}>Nuevo Paciente</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#9CA3AF" }}>✕</button>
@@ -743,15 +781,15 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [], c
             </div>
             {dniExito && <div style={{ fontSize: 12, color: "#059669", marginBottom: 8, background: "#ECFDF5", padding: "6px 10px", borderRadius: 8 }}>✅ DNI encontrado</div>}
             {dniError && <div style={{ fontSize: 12, color: "#DC2626", marginBottom: 8, background: "#FEF2F2", padding: "6px 10px", borderRadius: 8 }}>⚠️ {dniError}</div>}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="form-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Input label="Nombres *" value={form.nombre} onChange={e => set("nombre", e.target.value)} />
               <Input label="Apellidos *" value={form.apellidos} onChange={e => set("apellidos", e.target.value)} />
             </div>
-            <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="form-grid-2" style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Input label="Teléfono WhatsApp" value={form.telefono} onChange={e => set("telefono", e.target.value)} placeholder="9XXXXXXXX" />
               <Select label="Sucursal" value={form.sucursal} onChange={e => set("sucursal", e.target.value)} options={SUCURSALES.map(s => ({ value: s, label: s }))} />
             </div>
-            <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="form-grid-2" style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Input label="Fecha de compra" type="date" value={form.fecha} onChange={e => set("fecha", e.target.value)} />
               <Input label="Fecha estimada de entrega" type="date" value={form.fechaEntrega} onChange={e => set("fechaEntrega", e.target.value)} />
             </div>
@@ -772,7 +810,7 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [], c
           </div>
           <div style={{ background: "#F0FDF4", borderRadius: 12, padding: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#059669", marginBottom: 10 }}>💰 Pago Inicial</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <div className="form-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
               <Input label="Precio Lunas (S/)" type="number" value={form.precioLunas}
                 onChange={e => { const l = e.target.value; const m = form.precioMontura; set("precioLunas", l); set("total", ((parseFloat(l)||0)+(parseFloat(m)||0)).toFixed(2)); }}
                 placeholder="0.00" />
@@ -780,7 +818,7 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [], c
                 onChange={e => { const m = e.target.value; const l = form.precioLunas; set("precioMontura", m); set("total", ((parseFloat(l)||0)+(parseFloat(m)||0)).toFixed(2)); }}
                 placeholder="0.00" />
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            <div className="form-grid-3" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
               <Input label="Precio total (S/) *" type="number" value={form.total} onChange={e => set("total", e.target.value)} placeholder="0.00" />
               <Input label="Adelanto (S/) *" type="number" value={form.adelanto} onChange={e => set("adelanto", e.target.value)} placeholder="0.00" />
               <Select label="Método de pago" value={form.metodoPago} onChange={e => set("metodoPago", e.target.value)} options={METODOS_PAGO.map(m => ({ value: m, label: m }))} />
@@ -861,11 +899,11 @@ function ModalDetalle({ paciente, onClose, onUpdate, onEliminar, esJefe, configu
         )}
         {modoEditar ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="form-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Input label="Nombre" value={p.nombre} onChange={e => setField("nombre", e.target.value)} />
               <Input label="Teléfono" value={p.telefono} onChange={e => setField("telefono", e.target.value)} />
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="form-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <Input label="Fecha pedido" type="date" value={p.fecha} onChange={e => setField("fecha", e.target.value)} />
               <Input label="Fecha entrega" type="date" value={p.fechaEntrega || ""} onChange={e => setField("fechaEntrega", e.target.value)} />
             </div>
@@ -881,7 +919,7 @@ function ModalDetalle({ paciente, onClose, onUpdate, onEliminar, esJefe, configu
             </div>
             <div style={{ background: "#F0FDF4", borderRadius: 12, padding: 14 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: "#059669", marginBottom: 10 }}>💰 Precios</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+              <div className="form-grid-3" style{{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
                 <Input label="Precio Lunas (S/)" type="number" value={p.precioLunas || ""}
                   onChange={e => { const l = parseFloat(e.target.value)||0; const m = parseFloat(p.precioMontura)||0; setField("precioLunas", e.target.value); setField("total", l + m); }} placeholder="0.00" />
                 <Input label="Precio Montura (S/)" type="number" value={p.precioMontura || ""}
@@ -896,7 +934,7 @@ function ModalDetalle({ paciente, onClose, onUpdate, onEliminar, esJefe, configu
           </div>
         ) : (
           <>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+              <div className="sede-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
               <div style={{ background: "#F9FAFB", borderRadius: 10, padding: 12 }}>
                 <div style={{ fontSize: 11, color: "#6B7280", fontWeight: 600, marginBottom: 4 }}>PEDIDO</div>
                 <div style={{ fontSize: 13, color: "#111827" }}>{descripcionCompra || "—"}</div>
@@ -1046,7 +1084,7 @@ function Dashboard({ pacientes, sedeActual }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14 }}>
         <StatCard label="Ingresos Hoy" value={fmt(ingresosHoy)} sub="todos los abonos de hoy" color="#1D4ED8" icon="💰" />
         <StatCard label="Por Cobrar" value={fmt(totalPendiente)} sub={`${pendientes.length} pacientes`} color="#DC2626" icon="📋" />
         <StatCard label="Listos p/ Entregar" value={listos.length} sub="notificar pacientes" color="#10B981" icon="✅" />
@@ -1074,7 +1112,7 @@ function Dashboard({ pacientes, sedeActual }) {
       {/* ── 3 COLUMNAS KANBAN ── */}
       <div>
         <div style={{ fontWeight: 800, fontSize: 15, color: "#111827", marginBottom: 14 }}>📋 Estado de Pedidos</div>
-        <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+        <div className="kanban-cols" style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
           <ColKanban
             titulo="Realizó Compra" icon="🛍️" color="#1D4ED8" bg="#EFF6FF" border="#BFDBFE"
             items={realizaron}
@@ -1719,9 +1757,6 @@ export default function OptiManager() {
     { key: "reporte", label: "Reporte", icon: "📑" },
   ];
 
-  const t = temaActual;
-
-  // Genera 4 combinaciones a partir de los colores elegidos por el usuario
   const generarCombinaciones = (colores) => {
     const [c1, c2, c3] = colores;
     const hexToRgb = h => { const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h); return r ? [parseInt(r[1],16),parseInt(r[2],16),parseInt(r[3],16)] : [0,0,0]; };
@@ -1736,21 +1771,24 @@ export default function OptiManager() {
     ];
   };
 
-  return (
-    <div style={{ minHeight: "100vh", background: "#F3F4F6", fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}>
+  const { isMobile, isTablet } = useResponsive();
 
-      {/* ── OVERLAY cierra menú al hacer click fuera ── */}
+  return (
+    <div style={{ minHeight: "100vh", background: "#F3F4F6", fontFamily: "'DM Sans', 'Segoe UI', sans-serif", paddingBottom: isMobile ? 64 : 0 }}>
+
+      {/* ── OVERLAY ── */}
       {menuAbierto && <div onClick={() => setMenuAbierto(false)} style={{ position: "fixed", inset: 0, zIndex: 150 }} />}
 
-      {/* ── MODAL COLORES: paso 1 elige colores, paso 2 elige combinación ── */}
+      {/* ── MODAL COLORES ── */}
       {modalColores && <ModalPersonalizarColores temaActual={temaActual} onAplicar={(tema) => { setTemaActual(tema); setModalColores(false); }} onClose={() => setModalColores(false)} generarCombinaciones={generarCombinaciones} />}
 
-      <div style={{ background: t.primario, padding: "0 24px", position: "sticky", top: 0, zIndex: 200, boxShadow: `0 2px 12px ${t.primario}4D` }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", gap: 16 }}>
+      {/* ══════════ NAVBAR ══════════ */}
+      <div style={{ background: t.primario, padding: isMobile ? "0 12px" : "0 24px", position: "sticky", top: 0, zIndex: 200, boxShadow: `0 2px 12px ${t.primario}4D` }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center", gap: isMobile ? 8 : 16 }}>
 
-          {/* ── MENÚ HAMBURGUESA ── */}
+          {/* Hamburguesa */}
           <div style={{ position: "relative", zIndex: 201 }}>
-            <button onClick={() => setMenuAbierto(!menuAbierto)} style={{ background: menuAbierto ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.12)", border: "none", borderRadius: 10, padding: "9px 13px", cursor: "pointer", color: "#fff", fontSize: 20, fontFamily: "inherit", transition: "background 0.2s", lineHeight: 1 }}>☰</button>
+            <button onClick={() => setMenuAbierto(!menuAbierto)} style={{ background: menuAbierto ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.12)", border: "none", borderRadius: 10, padding: isMobile ? "8px 10px" : "9px 13px", cursor: "pointer", color: "#fff", fontSize: 18, lineHeight: 1 }}>☰</button>
             {menuAbierto && (
               <div style={{ position: "absolute", top: "calc(100% + 12px)", left: 0, width: 240, background: "#fff", borderRadius: 16, boxShadow: "0 12px 40px rgba(0,0,0,0.18)", border: "1px solid #E8EEF4", zIndex: 202, overflow: "hidden" }}>
                 <div style={{ background: t.primario, padding: "14px 18px" }}>
@@ -1768,32 +1806,65 @@ export default function OptiManager() {
               </div>
             )}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 0" }}>
-            <div style={{ background: "#fff", borderRadius: 10, width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>👁</div>
-            <span style={{ color: "#fff", fontWeight: 800, fontSize: 18, letterSpacing: 1 }}>OPTIMANAGER</span>
+
+          {/* Logo */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: isMobile ? "10px 0" : "14px 0", flexShrink: 0 }}>
+            <div style={{ background: "#fff", borderRadius: 8, width: isMobile ? 28 : 34, height: isMobile ? 28 : 34, display: "flex", alignItems: "center", justifyContent: "center", fontSize: isMobile ? 14 : 18 }}>👁</div>
+            {!isMobile && <span style={{ color: "#fff", fontWeight: 800, fontSize: 16, letterSpacing: 1 }}>OPTIMANAGER</span>}
           </div>
-          <nav style={{ display: "flex", gap: 2, flex: 1 }}>
-            {navItems.map(n => (
-              <button key={n.key} onClick={() => setVista(n.key)} style={{ background: vista === n.key ? "rgba(255,255,255,0.2)" : "transparent", color: "#fff", border: "none", borderRadius: 8, padding: "7px 12px", fontWeight: vista === n.key ? 700 : 500, fontSize: 13, cursor: "pointer", fontFamily: "inherit", transition: "background 0.2s" }}>{n.icon} {n.label}</button>
-            ))}
-          </nav>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ background: "rgba(255,255,255,0.15)", borderRadius: 8, padding: "5px 10px", fontSize: 12, color: "#fff", fontWeight: 600 }}>🏪 {sedeActual.replace("Óptica ", "")}</div>
-            <select value={sucursalFiltro} onChange={e => setSucursalFiltro(e.target.value)} style={{ background: "#fff", color: "#111827", border: "1px solid rgba(255,255,255,0.5)", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontFamily: "inherit", cursor: "pointer" }}>
-              <option value="Todas">Todas las sedes</option>
-              {SUCURSALES.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
+
+          {/* Nav desktop/tablet */}
+          {!isMobile && (
+            <nav className="nav-desktop" style={{ display: "flex", gap: 2, flex: 1 }}>
+              {navItems.map(n => (
+                <button key={n.key} onClick={() => setVista(n.key)} style={{ background: vista === n.key ? "rgba(255,255,255,0.2)" : "transparent", color: "#fff", border: "none", borderRadius: 8, padding: "7px 10px", fontWeight: vista === n.key ? 700 : 500, fontSize: 12, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                  {n.icon} <span className="nav-label">{n.label}</span>
+                </button>
+              ))}
+            </nav>
+          )}
+
+          {/* Right side */}
+          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 6 : 10, marginLeft: "auto" }}>
+            {!isMobile && (
+              <>
+                <div style={{ background: "rgba(255,255,255,0.15)", borderRadius: 8, padding: "5px 10px", fontSize: 11, color: "#fff", fontWeight: 600, whiteSpace: "nowrap" }}>🏪 {sedeActual.replace("Óptica ", "")}</div>
+                <select value={sucursalFiltro} onChange={e => setSucursalFiltro(e.target.value)} style={{ background: "#fff", color: "#111827", border: "none", borderRadius: 8, padding: "6px 8px", fontSize: 11, fontFamily: "inherit", cursor: "pointer" }}>
+                  <option value="Todas">Todas las sedes</option>
+                  {SUCURSALES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </>
+            )}
             <CampanaNotificaciones pacientes={pacientes} />
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: 8, padding: "5px 10px", fontSize: 12, color: "#fff" }}>{esJefe ? "👑" : "👤"} {usuarioActual?.username}</div>
-              <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: "6px 10px", color: "#fff", fontSize: 12, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>Salir</button>
-            </div>
-            <button onClick={() => setModalConfig(true)} title="Configurar datos de impresión" style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: "6px 10px", color: "#fff", fontSize: 14, cursor: "pointer" }}>⚙️</button>
-            <Btn onClick={() => setModalNuevo(true)} style={{ background: "#fff", color: t.primario, fontWeight: 800, fontSize: 12, padding: "7px 14px" }}>+ Nuevo</Btn>
+            {!isMobile && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: 8, padding: "5px 8px", fontSize: 11, color: "#fff" }}>{esJefe ? "👑" : "👤"} {usuarioActual?.username}</div>
+                <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: "6px 8px", color: "#fff", fontSize: 11, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>Salir</button>
+              </div>
+            )}
+            {isMobile && (
+              <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: "6px 10px", color: "#fff", fontSize: 11, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>Salir</button>
+            )}
+            <button onClick={() => setModalConfig(true)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: "6px 8px", color: "#fff", fontSize: 13, cursor: "pointer" }}>⚙️</button>
+            <button onClick={() => setModalNuevo(true)} style={{ background: "#fff", color: t.primario, fontWeight: 800, fontSize: isMobile ? 11 : 12, padding: isMobile ? "6px 10px" : "7px 14px", border: "none", borderRadius: 10, cursor: "pointer", whiteSpace: "nowrap" }}>+ Nuevo</button>
           </div>
         </div>
       </div>
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "24px 20px" }}>
+
+      {/* ── MOBILE BOTTOM NAV ── */}
+      {isMobile && (
+        <div className="nav-mobile-bar" style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 300, background: t.primario, display: "flex", borderTop: "2px solid rgba(255,255,255,0.1)", paddingBottom: "env(safe-area-inset-bottom)" }}>
+          {navItems.map(n => (
+            <button key={n.key} onClick={() => setVista(n.key)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "8px 4px", background: vista === n.key ? "rgba(255,255,255,0.15)" : "transparent", border: "none", color: "#fff", cursor: "pointer", fontSize: 18 }}>
+              <span>{n.icon}</span>
+              <span style={{ fontSize: 9, fontWeight: vista === n.key ? 800 : 500, opacity: vista === n.key ? 1 : 0.7 }}>{n.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* ── MAIN CONTENT ── */}
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: isMobile ? "14px 12px" : isTablet ? "18px 16px" : "24px 20px" }}>
         {vista === "dashboard" && <Dashboard pacientes={pacientes.filter(p => p.sucursal === sedeActual)} sedeActual={sedeActual} />}
         {vista === "pacientes" && <Pacientes pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} sucursalFiltro={sucursalFiltro} esJefe={esJefe} configuraciones={configuraciones} atendidoPor={usuarioActual?.nombre || usuarioActual?.username} />}
         {vista === "directorio" && <Directorio pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} esJefe={esJefe} configuraciones={configuraciones} atendidoPor={usuarioActual?.nombre || usuarioActual?.username} />}
