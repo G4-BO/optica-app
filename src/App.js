@@ -1713,6 +1713,22 @@ export default function OptiManager() {
   const [modalColores, setModalColores] = useState(false);
   const [temaActual, setTemaActual] = useState(TEMAS_COLOR[0]);
   const esJefe = (usuarioActual && usuarioActual.rol === "jefe");
+  const { isMobile, isTablet } = useResponsive();
+  const t = temaActual;
+
+  const generarCombinaciones = (colores) => {
+    const [c1, c2, c3] = colores;
+    const hexToRgb = h => { const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h); return r ? [parseInt(r[1],16),parseInt(r[2],16),parseInt(r[3],16)] : [0,0,0]; };
+    const lighten = (hex, amt) => { const [r,g,b] = hexToRgb(hex); return `rgb(${Math.min(255,r+amt)},${Math.min(255,g+amt)},${Math.min(255,b+amt)})`; };
+    const darken = (hex, amt) => { const [r,g,b] = hexToRgb(hex); return `rgb(${Math.max(0,r-amt)},${Math.max(0,g-amt)},${Math.max(0,b-amt)})`; };
+    const c2safe = c2 || c1; const c3safe = c3 || c2safe;
+    return [
+      { id:"combo1", nombre:"Clásico", primario: c1, secundario: darken(c1,40), acento: c2safe, bg: lighten(c1,200) },
+      { id:"combo2", nombre:"Contraste", primario: c2safe, secundario: c1, acento: c3safe, bg: lighten(c2safe,200) },
+      { id:"combo3", nombre:"Degradado", primario: darken(c1,20), secundario: darken(c2safe,30), acento: c3safe, bg: lighten(c3safe,210) },
+      { id:"combo4", nombre:"Invertido", primario: c3safe, secundario: darken(c3safe,40), acento: c1, bg: lighten(c1,215) },
+    ];
+  };
 
   useEffect(() => {
     injectResponsiveStyles();
@@ -1762,23 +1778,9 @@ export default function OptiManager() {
     { key: "reporte", label: "Reporte", icon: "📑" },
   ];
 
-  const generarCombinaciones = (colores) => {
-    const [c1, c2, c3] = colores;
-    const hexToRgb = h => { const r = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(h); return r ? [parseInt(r[1],16),parseInt(r[2],16),parseInt(r[3],16)] : [0,0,0]; };
-    const lighten = (hex, amt) => { const [r,g,b] = hexToRgb(hex); return `rgb(${Math.min(255,r+amt)},${Math.min(255,g+amt)},${Math.min(255,b+amt)})`; };
-    const darken = (hex, amt) => { const [r,g,b] = hexToRgb(hex); return `rgb(${Math.max(0,r-amt)},${Math.max(0,g-amt)},${Math.max(0,b-amt)})`; };
-    const c2safe = c2 || c1; const c3safe = c3 || c2safe;
-    return [
-      { id:"combo1", nombre:"Clásico", primario: c1, secundario: darken(c1,40), acento: c2safe, bg: lighten(c1,200) },
-      { id:"combo2", nombre:"Contraste", primario: c2safe, secundario: c1, acento: c3safe, bg: lighten(c2safe,200) },
-      { id:"combo3", nombre:"Degradado", primario: darken(c1,20), secundario: darken(c2safe,30), acento: c3safe, bg: lighten(c3safe,210) },
-      { id:"combo4", nombre:"Invertido", primario: c3safe, secundario: darken(c3safe,40), acento: c1, bg: lighten(c1,215) },
-    ];
-  };
-
-  const { isMobile, isTablet } = useResponsive();
-
   return (
+
+  const navItems = [
     <div style={{ minHeight: "100vh", background: "#F3F4F6", fontFamily: "'DM Sans', 'Segoe UI', sans-serif", paddingBottom: isMobile ? 64 : 0 }}>
 
       {/* ── OVERLAY ── */}
