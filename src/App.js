@@ -11,35 +11,39 @@ function useResponsive() {
 }
 
 // ─── GLOBAL RESPONSIVE STYLES ───────────────────────────────────────
-const responsiveStyle = document.createElement("style");
-responsiveStyle.textContent = `
-  * { box-sizing: border-box; }
-  body { margin: 0; }
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: #F1F5F9; }
-  ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
-  .kanban-cols { display: flex; gap: 14px; align-items: flex-start; }
-  @media (max-width: 639px) {
-    .kanban-cols { flex-direction: column; }
-    .stat-grid { grid-template-columns: 1fr 1fr !important; }
-    .form-grid-3 { grid-template-columns: 1fr !important; }
-    .form-grid-2 { grid-template-columns: 1fr !important; }
-    .modal-inner { width: 100% !important; max-width: 100% !important; border-radius: 16px 16px 0 0 !important; margin-top: auto !important; }
-    .modal-wrap { align-items: flex-end !important; padding: 0 !important; }
-    .sede-grid { grid-template-columns: 1fr !important; }
-    .metodo-grid { flex-wrap: wrap; }
-    .nav-desktop { display: none !important; }
-    .nav-right-desktop { display: none !important; }
-    .nav-mobile-bar { display: flex !important; }
-  }
-  @media (min-width: 640px) {
-    .nav-mobile-bar { display: none !important; }
-  }
-  @media (max-width: 1023px) {
-    .nav-label { display: none; }
-  }
-`;
-if (!document.head.querySelector("#opti-responsive")) { responsiveStyle.id = "opti-responsive"; document.head.appendChild(responsiveStyle); }
+function injectResponsiveStyles() {
+  if (document.getElementById("opti-responsive")) return;
+  const s = document.createElement("style");
+  s.id = "opti-responsive";
+  s.textContent = `
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #F1F5F9; }
+    ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 3px; }
+    .kanban-cols { display: flex; gap: 14px; align-items: flex-start; }
+    @media (max-width: 639px) {
+      .kanban-cols { flex-direction: column; }
+      .stat-grid { grid-template-columns: 1fr 1fr !important; }
+      .form-grid-3 { grid-template-columns: 1fr !important; }
+      .form-grid-2 { grid-template-columns: 1fr !important; }
+      .modal-inner { width: 100% !important; max-width: 100% !important; border-radius: 16px 16px 0 0 !important; margin-top: auto !important; }
+      .modal-wrap { align-items: flex-end !important; padding: 0 !important; }
+      .sede-grid { grid-template-columns: 1fr !important; }
+      .metodo-grid { flex-wrap: wrap; }
+      .nav-desktop { display: none !important; }
+      .nav-right-desktop { display: none !important; }
+      .nav-mobile-bar { display: flex !important; }
+    }
+    @media (min-width: 640px) {
+      .nav-mobile-bar { display: none !important; }
+    }
+    @media (max-width: 1023px) {
+      .nav-label { display: none; }
+    }
+  `;
+  document.head.appendChild(s);
+}
 
 // ─── FIREBASE CONFIG ────────────────────────────────────────────────
 const firebaseConfig = {
@@ -1149,7 +1153,7 @@ function Pacientes({ pacientes, onUpdate, onEliminar, sucursalFiltro, esJefe, co
   const filtrados = pacientes.filter(p => {
     const matchSucursal = sucursalFiltro === "Todas" || p.sucursal === sucursalFiltro;
     const matchEstado = estadoFiltro === "TODOS" || p.estado === estadoFiltro;
-    const matchBuscar = p.nombre.toLowerCase().includes(buscar.toLowerCase()) || p.telefono?.includes(buscar) || p.dni?.includes(buscar);
+    const matchBuscar = p.nombre.toLowerCase().includes(buscar.toLowerCase()) || (p.telefono || '').includes(buscar) || (p.dni || '').includes(buscar);
     return matchSucursal && matchEstado && matchBuscar;
   });
   return (
@@ -1375,7 +1379,7 @@ function Reporte({ pacientes, movimientos, sucursalFiltro, esJefe, onAnularVenta
   const ingresosExtraEfectivo = ingresosMov.filter(m => m.metodo === "Efectivo").reduce((s, m) => s + m.monto, 0);
   const gastosEfectivo = gastosDia.filter(m => m.metodo === "Efectivo").reduce((s, m) => s + m.monto, 0);
   const efectivoEnCaja = abonosEfectivo + ingresosExtraEfectivo - gastosEfectivo;
-  const montoAperturaActual = cajaInfo?.montoApertura || 0;
+  const montoAperturaActual = (cajaInfo ? cajaInfo.montoApertura || 0 : 0);
   const efectivoEsperado = montoAperturaActual + efectivoEnCaja;
   const guardarCierre = async () => {
     if (!montoContado) return alert("Ingresa el monto contado.");
@@ -1402,7 +1406,7 @@ function Reporte({ pacientes, movimientos, sucursalFiltro, esJefe, onAnularVenta
           <input type="date" value={fechaReporte} onChange={e => setFechaReporte(e.target.value)} style={{ border: "1.5px solid #D1D5DB", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontFamily: "inherit", background: "#FAFAFA", outline: "none" }} />
           <button onClick={() => setFechaReporte(today())} style={{ background: "#F3F4F6", border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 600, color: "#374151", cursor: "pointer", fontFamily: "inherit" }}>Hoy</button>
           <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-            <Btn variant="ghost" onClick={() => { setMontoApertura(cajaInfo?.montoApertura ?? ""); setModalApertura(true); }} style={{ fontSize: 12, padding: "7px 14px" }}>🔓 Aperturar Caja</Btn>
+            <Btn variant="ghost" onClick={() => { setMontoApertura((cajaInfo ? cajaInfo.montoApertura || "" : "")); setModalApertura(true); }} style={{ fontSize: 12, padding: "7px 14px" }}>🔓 Aperturar Caja</Btn>
             <Btn variant="ghost" onClick={() => setModalCierre(true)} style={{ fontSize: 12, padding: "7px 14px" }}>🔒 Cierre de Caja</Btn>
           </div>
         </div>
@@ -1458,14 +1462,14 @@ function Reporte({ pacientes, movimientos, sucursalFiltro, esJefe, onAnularVenta
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           <Card style={{ width: "100%", maxWidth: 380 }}>
             <div style={{ fontSize: 16, fontWeight: 800, color: "#DC2626", marginBottom: 12 }}>⚠️ Anular Venta</div>
-            <div style={{ fontSize: 14, color: "#374151", marginBottom: 20 }}>¿Confirmas la anulación de la venta de <strong>{pacientes.find(p => p.id === anularId)?.nombre}</strong>?</div>
+            <div style={{ fontSize: 14, color: "#374151", marginBottom: 20 }}>¿Confirmas la anulación de la venta de <strong>{(pacientes.find(p => p.id === anularId) || {}).nombre}</strong>?</div>
             <div style={{ display: "flex", gap: 10 }}><Btn variant="ghost" onClick={() => setAnularId(null)} style={{ flex: 1 }}>Cancelar</Btn><Btn variant="danger" onClick={() => { onAnularVenta(anularId); setAnularId(null); }} style={{ flex: 1 }}>Sí, Anular</Btn></div>
           </Card>
         </div>
       )}
       <Card style={{ padding: 14 }}>
         <div style={{ fontWeight: 800, fontSize: 13, color: "#374151", marginBottom: 8 }}>🔓 Apertura de Caja</div>
-        {cajaInfo?.montoApertura !== undefined ? (
+        {(cajaInfo && cajaInfo.montoApertura !== undefined) ? (
           <div style={{ fontSize: 13, color: "#374151" }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span>Monto inicial:</span>
@@ -1665,8 +1669,8 @@ function ModalPersonalizarColores({ temaActual, onAplicar, onClose, generarCombi
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               {combos.map(combo => (
                 <button key={combo.id} onClick={() => setSeleccionado(combo)} style={{
-                  border: seleccionado?.id === combo.id ? `2.5px solid ${combo.primario}` : "2px solid #E5E7EB",
-                  borderRadius: 14, padding: 12, background: seleccionado?.id === combo.id ? combo.bg || "#F0F9FF" : "#FAFAFA",
+                  border: (seleccionado && seleccionado.id === combo.id) ? `2.5px solid ${combo.primario}` : "2px solid #E5E7EB",
+                  borderRadius: 14, padding: 12, background: (seleccionado && seleccionado.id === combo.id) ? combo.bg || "#F0F9FF" : "#FAFAFA",
                   cursor: "pointer", textAlign: "left", transition: "all 0.15s"
                 }}>
                   <NavPreview tema={combo} />
@@ -1681,7 +1685,7 @@ function ModalPersonalizarColores({ temaActual, onAplicar, onClose, generarCombi
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}>
               <button onClick={() => setPaso(1)} style={{ padding: "9px 18px", borderRadius: 10, border: "1.5px solid #E5E7EB", background: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#6B7280", fontFamily: "inherit" }}>← Volver</button>
-              <button onClick={() => seleccionado && onAplicar(seleccionado)} style={{ padding: "9px 20px", borderRadius: 10, border: "none", background: seleccionado?.primario || "#1D4ED8", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#fff", fontFamily: "inherit" }}>✓ Aplicar</button>
+              <button onClick={() => seleccionado && onAplicar(seleccionado)} style={{ padding: "9px 20px", borderRadius: 10, border: "none", background: (seleccionado ? seleccionado.primario : "#1D4ED8"), cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#fff", fontFamily: "inherit" }}>✓ Aplicar</button>
             </div>
           </>
         )}
@@ -1708,9 +1712,10 @@ export default function OptiManager() {
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [modalColores, setModalColores] = useState(false);
   const [temaActual, setTemaActual] = useState(TEMAS_COLOR[0]);
-  const esJefe = usuarioActual?.rol === "jefe";
+  const esJefe = (usuarioActual && usuarioActual.rol === "jefe");
 
   useEffect(() => {
+    injectResponsiveStyles();
     const unsubPacientes = onSnapshot(collection(db, "pacientes"), (snap) => { setPacientes(snap.docs.map(d => ({ ...d.data(), id: d.id }))); });
     const unsubMovimientos = onSnapshot(collection(db, "movimientos"), (snap) => { setMovimientos(snap.docs.map(d => ({ ...d.data(), id: d.id }))); });
     const unsubUsuarios = onSnapshot(collection(db, "usuarios"), (snap) => { const fbUsuarios = snap.docs.map(d => ({ ...d.data(), id: d.id })); if (fbUsuarios.length > 0) setUsuarios(prev => { const adminDefault = prev.find(u => u.username === "admin"); return adminDefault ? [adminDefault, ...fbUsuarios] : fbUsuarios; }); });
@@ -1838,7 +1843,7 @@ export default function OptiManager() {
             <CampanaNotificaciones pacientes={pacientes} />
             {!isMobile && (
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: 8, padding: "5px 8px", fontSize: 11, color: "#fff" }}>{esJefe ? "👑" : "👤"} {usuarioActual?.username}</div>
+                <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: 8, padding: "5px 8px", fontSize: 11, color: "#fff" }}>{esJefe ? "👑" : "👤"} {usuarioActual ? usuarioActual.username : ""}</div>
                 <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: "6px 8px", color: "#fff", fontSize: 11, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>Salir</button>
               </div>
             )}
@@ -1866,13 +1871,13 @@ export default function OptiManager() {
       {/* ── MAIN CONTENT ── */}
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: isMobile ? "14px 12px" : isTablet ? "18px 16px" : "24px 20px" }}>
         {vista === "dashboard" && <Dashboard pacientes={pacientes.filter(p => p.sucursal === sedeActual)} sedeActual={sedeActual} />}
-        {vista === "pacientes" && <Pacientes pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} sucursalFiltro={sucursalFiltro} esJefe={esJefe} configuraciones={configuraciones} atendidoPor={usuarioActual?.nombre || usuarioActual?.username} />}
-        {vista === "directorio" && <Directorio pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} esJefe={esJefe} configuraciones={configuraciones} atendidoPor={usuarioActual?.nombre || usuarioActual?.username} />}
+        {vista === "pacientes" && <Pacientes pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} sucursalFiltro={sucursalFiltro} esJefe={esJefe} configuraciones={configuraciones} atendidoPor={(usuarioActual ? usuarioActual.nombre || usuarioActual.username : "")} />}
+        {vista === "directorio" && <Directorio pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} esJefe={esJefe} configuraciones={configuraciones} atendidoPor={(usuarioActual ? usuarioActual.nombre || usuarioActual.username : "")} />}
         {vista === "cuentas" && <Cuentas pacientes={pacientes} sucursalFiltro={sucursalFiltro} />}
         {vista === "movimientos" && <Movimientos movimientos={movimientos} onAdd={addMovimiento} sucursalFiltro={sucursalFiltro} />}
-        {vista === "reporte" && <Reporte pacientes={pacientes.filter(p => sucursalFiltro === "Todas" || p.sucursal === sucursalFiltro)} movimientos={movimientos} sucursalFiltro={sucursalFiltro} esJefe={esJefe} onAnularVenta={anularVenta} atendidoPor={usuarioActual?.nombre || usuarioActual?.username} />}
+        {vista === "reporte" && <Reporte pacientes={pacientes.filter(p => sucursalFiltro === "Todas" || p.sucursal === sucursalFiltro)} movimientos={movimientos} sucursalFiltro={sucursalFiltro} esJefe={esJefe} onAnularVenta={anularVenta} atendidoPor={(usuarioActual ? usuarioActual.nombre || usuarioActual.username : "")} />}
       </div>
-      {modalNuevo && <ModalNuevoPaciente onClose={() => setModalNuevo(false)} onSave={addPaciente} sucursalActual={sedeActual} pacientes={pacientes} configuraciones={configuraciones} atendidoPor={usuarioActual?.nombre || usuarioActual?.username} />}
+      {modalNuevo && <ModalNuevoPaciente onClose={() => setModalNuevo(false)} onSave={addPaciente} sucursalActual={sedeActual} pacientes={pacientes} configuraciones={configuraciones} atendidoPor={(usuarioActual ? usuarioActual.nombre || usuarioActual.username : "")} />}
       {modalConfig && <ModalConfiguracionImpresion sucursal={sedeActual} config={configuraciones[sedeActual]} onSave={guardarConfigSucursal} onClose={() => setModalConfig(false)} />}
     </div>
   );
