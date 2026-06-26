@@ -1779,8 +1779,6 @@ export default function OptiManager() {
   ];
 
   return (
-
-  const navItems = [
     <div style={{ minHeight: "100vh", background: "#F3F4F6", fontFamily: "'DM Sans', 'Segoe UI', sans-serif", paddingBottom: isMobile ? 64 : 0 }}>
 
       {/* ── OVERLAY ── */}
