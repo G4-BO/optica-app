@@ -1025,9 +1025,18 @@ function ModalDetalle({ paciente, onClose, onUpdate, onEliminar, esJefe, configu
   );
 }
 
-function Dashboard({ pacientes, sedeActual }) {
+function Dashboard({ pacientes, sedeActual, onUpdate }) {
   const hoy = today();
-  const filtrados = pacientes;
+  const [buscar, setBuscar] = useState("");
+
+  const filtrados = pacientes.filter(p => {
+    if (!buscar.trim()) return true;
+    const q = buscar.toLowerCase();
+    return (p.nombre || "").toLowerCase().includes(q) ||
+           (p.dni || "").includes(q) ||
+           (p.telefono || "").includes(q);
+  });
+
   const ingresosHoy = pacientes.flatMap(p => p.abonos.filter(a => a.fecha === hoy)).reduce((s, a) => s + a.monto, 0);
   const pendientes = pacientes.filter(p => saldoPendiente(p) > 0 && p.estado !== "RECOGIDO");
   const totalPendiente = pendientes.reduce((s, p) => s + saldoPendiente(p), 0);
@@ -1036,7 +1045,6 @@ function Dashboard({ pacientes, sedeActual }) {
   const realizaron = filtrados.filter(p => p.estado === "PEDIDO");
   const entregados = filtrados.filter(p => p.estado === "RECOGIDO");
 
-  // ── Resumen de caja de la sucursal (solo la sede en la que se inició sesión) ──
   const totalRecaudadoSede = pacientes.flatMap(p => p.abonos || []).reduce((s, a) => s + a.monto, 0);
   const abonosHoy = pacientes.flatMap(p => (p.abonos || []).filter(a => a.fecha === hoy));
   const ventasHoySede = abonosHoy.reduce((s, a) => s + a.monto, 0);
@@ -1064,6 +1072,15 @@ function Dashboard({ pacientes, sedeActual }) {
     window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, "_blank");
   };
 
+  const moverAListo = (p) => {
+    abrirWA(p, msgListo(p));
+    onUpdate({ ...p, estado: "LISTO" });
+  };
+
+  const moverAEntregado = (p) => {
+    onUpdate({ ...p, estado: "RECOGIDO" });
+  };
+
   const ColKanban = ({ titulo, color, bg, border, icon, items, renderBtn }) => (
     <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
       <div style={{ background: bg, border: `2px solid ${border}`, borderRadius: "14px 14px 0 0", padding: "12px 16px", display: "flex", alignItems: "center", gap: 8 }}>
@@ -1077,8 +1094,8 @@ function Dashboard({ pacientes, sedeActual }) {
           : items.map(p => (
             <div key={p.id} style={{ background: "#fff", borderRadius: 10, padding: "10px 12px", border: `1px solid ${border}`, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
               <div style={{ fontWeight: 700, fontSize: 13, color: "#111827", marginBottom: 2 }}>{p.nombre}</div>
-              <div style={{ fontSize: 11, color: "#6B7280", marginBottom: p.telefono ? 8 : 0 }}>{p.sucursal.replace("Óptica ", "🏪 ")} · {fmt(saldoPendiente(p))} saldo</div>
-              {renderBtn && p.telefono && renderBtn(p)}
+              <div style={{ fontSize: 11, color: "#6B7280", marginBottom: renderBtn ? 8 : 0 }}>{(p.sucursal || "").replace("Óptica ", "🏪 ")} · {fmt(saldoPendiente(p))} saldo</div>
+              {renderBtn && renderBtn(p)}
             </div>
           ))
         }
@@ -1113,6 +1130,20 @@ function Dashboard({ pacientes, sedeActual }) {
         </div>
       </Card>
 
+      {/* ── BARRA DE BÚSQUEDA ── */}
+      <div style={{ position: "relative" }}>
+        <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 16, color: "#9CA3AF" }}>🔍</span>
+        <input
+          value={buscar}
+          onChange={e => setBuscar(e.target.value)}
+          placeholder="Buscar paciente por nombre, DNI o teléfono..."
+          style={{ width: "100%", padding: "12px 16px 12px 42px", borderRadius: 12, border: "1.5px solid #E5E7EB", fontSize: 14, fontFamily: "inherit", background: "#fff", outline: "none", boxSizing: "border-box", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
+        />
+        {buscar && (
+          <button onClick={() => setBuscar("")} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#9CA3AF" }}>✕</button>
+        )}
+      </div>
+
       {/* ── 3 COLUMNAS KANBAN ── */}
       <div>
         <div style={{ fontWeight: 800, fontSize: 15, color: "#111827", marginBottom: 14 }}>📋 Estado de Pedidos</div>
@@ -1120,15 +1151,24 @@ function Dashboard({ pacientes, sedeActual }) {
           <ColKanban
             titulo="Realizó Compra" icon="🛍️" color="#1D4ED8" bg="#EFF6FF" border="#BFDBFE"
             items={realizaron}
-            renderBtn={null}
+            renderBtn={(p) => (
+              <button onClick={() => moverAListo(p)} style={{ display: "flex", alignItems: "center", gap: 6, background: "#059669", color: "#fff", border: "none", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", width: "100%" }}>
+                ✅ Listo — Avisar por WhatsApp
+              </button>
+            )}
           />
           <ColKanban
             titulo="Listo para Entregar" icon="✅" color="#059669" bg="#ECFDF5" border="#6EE7B7"
             items={listos}
             renderBtn={(p) => (
-              <button onClick={() => abrirWA(p, msgListo(p))} style={{ display: "flex", alignItems: "center", gap: 6, background: "#25D366", color: "#fff", border: "none", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                📱 Avisar por WhatsApp
-              </button>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <button onClick={() => abrirWA(p, msgListo(p))} style={{ display: "flex", alignItems: "center", gap: 6, background: "#25D366", color: "#fff", border: "none", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                  📱 Avisar por WhatsApp
+                </button>
+                <button onClick={() => moverAEntregado(p)} style={{ display: "flex", alignItems: "center", gap: 6, background: "#7C3AED", color: "#fff", border: "none", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                  🎉 Marcar como Entregado
+                </button>
+              </div>
             )}
           />
           <ColKanban
@@ -1870,7 +1910,7 @@ export default function OptiManager() {
 
       {/* ── MAIN CONTENT ── */}
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: isMobile ? "14px 12px" : isTablet ? "18px 16px" : "24px 20px" }}>
-        {vista === "dashboard" && <Dashboard pacientes={pacientes.filter(p => p.sucursal === sedeActual)} sedeActual={sedeActual} />}
+        {vista === "dashboard" && <Dashboard pacientes={pacientes.filter(p => sucursalFiltro === "Todas" || p.sucursal === sucursalFiltro)} sedeActual={sedeActual} onUpdate={updatePaciente} />}
         {vista === "pacientes" && <Pacientes pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} sucursalFiltro={sucursalFiltro} esJefe={esJefe} configuraciones={configuraciones} atendidoPor={(usuarioActual ? usuarioActual.nombre || usuarioActual.username : "")} />}
         {vista === "directorio" && <Directorio pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} esJefe={esJefe} configuraciones={configuraciones} atendidoPor={(usuarioActual ? usuarioActual.nombre || usuarioActual.username : "")} />}
         {vista === "cuentas" && <Cuentas pacientes={pacientes} sucursalFiltro={sucursalFiltro} />}
