@@ -1131,16 +1131,16 @@ function Dashboard({ pacientes, sedeActual, onUpdate }) {
       </Card>
 
       {/* ── BARRA DE BÚSQUEDA ── */}
-      <div style={{ position: "relative" }}>
-        <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 16, color: "#9CA3AF" }}>🔍</span>
+      <div style={{ background: "#fff", borderRadius: 14, padding: "10px 16px", display: "flex", alignItems: "center", gap: 10, boxShadow: "0 1px 6px rgba(0,0,0,0.08)", border: "1.5px solid #E5E7EB" }}>
+        <span style={{ fontSize: 18, color: "#9CA3AF" }}>🔍</span>
         <input
           value={buscar}
           onChange={e => setBuscar(e.target.value)}
           placeholder="Buscar paciente por nombre, DNI o teléfono..."
-          style={{ width: "100%", padding: "12px 16px 12px 42px", borderRadius: 12, border: "1.5px solid #E5E7EB", fontSize: 14, fontFamily: "inherit", background: "#fff", outline: "none", boxSizing: "border-box", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}
+          style={{ flex: 1, border: "none", outline: "none", fontSize: 14, fontFamily: "inherit", background: "transparent", color: "#111827" }}
         />
         {buscar && (
-          <button onClick={() => setBuscar("")} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#9CA3AF" }}>✕</button>
+          <button onClick={() => setBuscar("")} style={{ background: "#F3F4F6", border: "none", borderRadius: 8, width: 28, height: 28, cursor: "pointer", fontSize: 14, color: "#6B7280", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
         )}
       </div>
 
@@ -1152,7 +1152,7 @@ function Dashboard({ pacientes, sedeActual, onUpdate }) {
             titulo="Realizó Compra" icon="🛍️" color="#1D4ED8" bg="#EFF6FF" border="#BFDBFE"
             items={realizaron}
             renderBtn={(p) => (
-              <button onClick={() => moverAListo(p)} style={{ display: "flex", alignItems: "center", gap: 6, background: "#059669", color: "#fff", border: "none", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", width: "100%" }}>
+              <button onClick={() => moverAListo(p)} style={{ display: "flex", alignItems: "center", gap: 6, background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", width: "100%" }}>
                 ✅ Listo — Avisar por WhatsApp
               </button>
             )}
@@ -1161,14 +1161,9 @@ function Dashboard({ pacientes, sedeActual, onUpdate }) {
             titulo="Listo para Entregar" icon="✅" color="#059669" bg="#ECFDF5" border="#6EE7B7"
             items={listos}
             renderBtn={(p) => (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <button onClick={() => abrirWA(p, msgListo(p))} style={{ display: "flex", alignItems: "center", gap: 6, background: "#25D366", color: "#fff", border: "none", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                  📱 Avisar por WhatsApp
-                </button>
-                <button onClick={() => moverAEntregado(p)} style={{ display: "flex", alignItems: "center", gap: 6, background: "#7C3AED", color: "#fff", border: "none", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                  🎉 Marcar como Entregado
-                </button>
-              </div>
+              <button onClick={() => moverAEntregado(p)} style={{ display: "flex", alignItems: "center", gap: 6, background: "#059669", color: "#fff", border: "none", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", width: "100%" }}>
+                🎉 Marcar como Entregado
+              </button>
             )}
           />
           <ColKanban
