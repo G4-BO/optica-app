@@ -1808,7 +1808,6 @@ export default function OptiManager() {
   const navItems = [
     { key: "dashboard", label: "Dashboard", icon: "📊" },
     { key: "pacientes", label: "Pacientes", icon: "👥" },
-    { key: "directorio", label: "Directorio", icon: "🗂️" },
     { key: "movimientos", label: "Movimientos", icon: "💸" },
     { key: "reporte", label: "Reporte", icon: "📑" },
   ];
@@ -1837,6 +1836,10 @@ export default function OptiManager() {
                 <div style={{ padding: "6px 0" }}>
                   <button onClick={() => { setVista("cuentas"); setMenuAbierto(false); }} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 18px", background: vista === "cuentas" ? `${t.bg}` : "transparent", border: "none", cursor: "pointer", fontSize: 14, fontWeight: vista === "cuentas" ? 700 : 500, color: vista === "cuentas" ? t.primario : "#374151", fontFamily: "inherit" }}>
                     <span style={{ fontSize: 18 }}>💳</span> Cuentas
+                  </button>
+                  <div style={{ height: 1, background: "#F3F4F6", margin: "2px 12px" }} />
+                  <button onClick={() => { setVista("directorio"); setMenuAbierto(false); }} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 18px", background: vista === "directorio" ? `${t.bg}` : "transparent", border: "none", cursor: "pointer", fontSize: 14, fontWeight: vista === "directorio" ? 700 : 500, color: vista === "directorio" ? t.primario : "#374151", fontFamily: "inherit" }}>
+                    <span style={{ fontSize: 18 }}>🗂️</span> Directorio
                   </button>
                   <div style={{ height: 1, background: "#F3F4F6", margin: "2px 12px" }} />
                   <button onClick={() => { setModalColores(true); setMenuAbierto(false); }} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 18px", background: "transparent", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 500, color: "#374151", fontFamily: "inherit" }}>
@@ -1905,7 +1908,7 @@ export default function OptiManager() {
 
       {/* ── MAIN CONTENT ── */}
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: isMobile ? "14px 12px" : isTablet ? "18px 16px" : "24px 20px" }}>
-        {vista === "dashboard" && <Dashboard pacientes={pacientes.filter(p => sucursalFiltro === "Todas" || p.sucursal === sucursalFiltro)} sedeActual={sedeActual} onUpdate={updatePaciente} />}
+        {vista === "dashboard" && <Dashboard pacientes={pacientes.filter(p => sucursalFiltro === "Todas" || p.sucursal === sucursalFiltro)} sedeActual={sucursalFiltro !== "Todas" ? sucursalFiltro : sedeActual} onUpdate={updatePaciente} />}
         {vista === "pacientes" && <Pacientes pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} sucursalFiltro={sucursalFiltro} esJefe={esJefe} configuraciones={configuraciones} atendidoPor={(usuarioActual ? usuarioActual.nombre || usuarioActual.username : "")} />}
         {vista === "directorio" && <Directorio pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} esJefe={esJefe} configuraciones={configuraciones} atendidoPor={(usuarioActual ? usuarioActual.nombre || usuarioActual.username : "")} />}
         {vista === "cuentas" && <Cuentas pacientes={pacientes} sucursalFiltro={sucursalFiltro} />}
