@@ -67,10 +67,10 @@ const ESTADOS = {
   RECOGIDO: { label: "Recogido", color: "#6B7280", bg: "#F3F4F6" },
 };
 
-const TIPOS_LENTE = ["Monofocal", "Bifocal flapto", "Multifuncional", "Bifocal invisible"];
+const TIPOS_LENTE = ["Monofocal", "Bifocal flapto", "Bifocal invisible", "Multifocal"];
 const TIPOS_TRATAMIENTO = ["Blancas","Antirreflex","Blue Protec","Fotomatic","Fotoblue","Digital"];
 const METODOS_PAGO = ["Efectivo", "Yape", "Plin", "POS", "Transferencia"];
-const MATERIALES_LUNA = ["Resinas", "Cristal", "Policarbonato", "Resinas NK"];
+const MATERIALES_LUNA = ["Resinas", "Cristal", "Policarbonato", "Resinas NK", "MR8"];
 
 const totalAbonado = (p) => p.abonos.reduce((s, a) => s + a.monto, 0);
 const saldoPendiente = (p) => p.total - totalAbonado(p);
