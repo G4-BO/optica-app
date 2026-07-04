@@ -67,7 +67,7 @@ const ESTADOS = {
   RECOGIDO: { label: "Recogido", color: "#6B7280", bg: "#F3F4F6" },
 };
 
-const TIPOS_LENTE = ["Monofocal", "Bifocal flapto", "Bifocal invisible", "Multifocal"];
+const TIPOS_LENTE = ["Monofocal", "Bifocal flat-top", "Bifocal invisible", "Multifocal"];
 const TIPOS_TRATAMIENTO = ["Blancas","Antirreflex","Blue Protec","Fotomatic","Fotoblue","Digital"];
 const METODOS_PAGO = ["Efectivo", "Yape", "Plin", "POS", "Transferencia"];
 const MATERIALES_LUNA = ["Resinas", "Cristal", "Policarbonato", "Resinas NK", "MR8"];
@@ -375,6 +375,7 @@ function CuadroGraduacion({ graduacion, onChange, readOnly = false }) {
                   {readOnly
                     ? <div style={{ ...cellStyle, background: "#F9FAFB" }}>{g[k] || "—"}</div>
                     : <input style={cellStyle} value={g[k]} onChange={e => set(k, e.target.value)}
+                        inputMode="decimal"
                         placeholder={k.includes("Adicion") ? "+0.00" : k.includes("Eje") ? "0°" : "0.00"}
                         onFocus={e => e.target.style.borderColor = "#1D4ED8"}
                         onBlur={e => e.target.style.borderColor = "#D1D5DB"}
@@ -1346,16 +1347,23 @@ function Movimientos({ movimientos, onAdd, sucursalFiltro }) {
             <button key={t.key} onClick={() => set("tipo", t.key)} style={{ flex: 1, padding: "12px 0", borderRadius: 12, border: `2px solid ${form.tipo === t.key ? t.border : "#E5E7EB"}`, background: form.tipo === t.key ? t.bg : "#fff", color: form.tipo === t.key ? t.color : "#6B7280", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>{t.label}</button>
           ))}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+        <div className="form-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
           <Input label="Monto (S/) *" type="number" value={form.monto} onChange={e => set("monto", e.target.value)} placeholder="0.00" />
-          <Select label="Método" value={form.metodo} onChange={e => set("metodo", e.target.value)} options={["Efectivo","Yape"].map(m => ({ value: m, label: m }))} />
+          <Select label="Método" value={form.metodo} onChange={e => set("metodo", e.target.value)} options={["Efectivo","Yape","Plin","POS","Transferencia"].map(m => ({ value: m, label: m }))} />
           <Input label="Fecha" type="date" value={form.fecha} onChange={e => set("fecha", e.target.value)} />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: form.tipo === "gasto" ? "1fr 1fr 1fr" : "1fr 1fr", gap: 12, marginBottom: 16 }}>
           <Select label="Sucursal" value={form.sucursal} onChange={e => set("sucursal", e.target.value)} options={SUCURSALES.map(s => ({ value: s, label: s }))} />
-          {form.tipo === "gasto" && <Select label="Categoría" value={form.categoria} onChange={e => set("categoria", e.target.value)} options={CATEGORIAS_GASTO.map(c => ({ value: c, label: c }))} />}
-          <Input label={form.tipo === "gasto" ? "Descripción *" : "Descripción (opcional)"} value={form.descripcion} onChange={e => set("descripcion", e.target.value)} placeholder={form.tipo === "gasto" ? "Ej: Pago personal..." : "Ej: Ingreso extra..."} />
         </div>
+        {form.tipo === "gasto" && (
+          <div className="form-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <Select label="Categoría" value={form.categoria} onChange={e => set("categoria", e.target.value)} options={CATEGORIAS_GASTO.map(c => ({ value: c, label: c }))} />
+            <Input label="Descripción *" value={form.descripcion} onChange={e => set("descripcion", e.target.value)} placeholder="Ej: Pago personal..." />
+          </div>
+        )}
+        {form.tipo === "ingreso" && (
+          <div style={{ marginBottom: 12 }}>
+            <Input label="Descripción (opcional)" value={form.descripcion} onChange={e => set("descripcion", e.target.value)} placeholder="Ej: Ingreso extra..." />
+          </div>
+        )}
         <div style={{ display: "flex", justifyContent: "flex-end" }}><Btn variant={form.tipo === "ingreso" ? "success" : "danger"} onClick={guardar}>{form.tipo === "ingreso" ? "💰 Registrar Ingreso" : "💸 Registrar Gasto"}</Btn></div>
       </Card>
       <Card>
@@ -1894,7 +1902,16 @@ export default function OptiManager() {
         </div>
       </div>
 
-      {/* ── MOBILE BOTTOM NAV ── */}
+      {/* ── MOBILE SUCURSAL BAR ── */}
+      {isMobile && (
+        <div style={{ background: "#1F2937", padding: "8px 12px", display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 12, color: "#9CA3AF", fontWeight: 600, whiteSpace: "nowrap" }}>🏪 Sede:</span>
+          <select value={sucursalFiltro} onChange={e => setSucursalFiltro(e.target.value)} style={{ flex: 1, background: "#374151", color: "#fff", border: "1px solid #4B5563", borderRadius: 8, padding: "6px 10px", fontSize: 13, fontFamily: "inherit", cursor: "pointer" }}>
+            <option value="Todas">Todas las sedes</option>
+            {SUCURSALES.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+      )}
       {isMobile && (
         <div className="nav-mobile-bar" style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 300, background: t.primario, display: "flex", borderTop: "2px solid rgba(255,255,255,0.1)", paddingBottom: "env(safe-area-inset-bottom)" }}>
           {navItems.map(n => (
