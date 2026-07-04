@@ -1130,26 +1130,23 @@ function Dashboard({ pacientes, sedeActual, onUpdate }) {
         </div>
       </Card>
 
-      {/* ── BARRA DE BÚSQUEDA ── */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", borderRadius: 10, padding: "8px 14px", border: "1.5px solid #E5E7EB", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", minWidth: 280 }}>
-          <span style={{ fontSize: 15, color: "#9CA3AF" }}>🔍</span>
-          <input
-            value={buscar}
-            onChange={e => setBuscar(e.target.value)}
-            placeholder="Buscar paciente..."
-            style={{ border: "none", outline: "none", fontSize: 13, fontFamily: "inherit", background: "transparent", color: "#111827", width: 180 }}
-          />
-          {buscar && (
-            <button onClick={() => setBuscar("")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "#9CA3AF", padding: 0 }}>✕</button>
-          )}
-        </div>
-        {buscar && <span style={{ fontSize: 12, color: "#6B7280" }}>{filtrados.length} resultado(s)</span>}
-      </div>
-
-      {/* ── 3 COLUMNAS KANBAN ── */}
+      {/* ── KANBAN + BÚSQUEDA ── */}
       <div>
-        <div style={{ fontWeight: 800, fontSize: 15, color: "#111827", marginBottom: 14 }}>📋 Estado de Pedidos</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ fontWeight: 800, fontSize: 15, color: "#111827" }}>📋 Estado de Pedidos</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fff", borderRadius: 10, padding: "7px 14px", border: "1.5px solid #E5E7EB", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+            <span style={{ fontSize: 14, color: "#9CA3AF" }}>🔍</span>
+            <input
+              value={buscar}
+              onChange={e => setBuscar(e.target.value)}
+              placeholder="Buscar paciente..."
+              style={{ border: "none", outline: "none", fontSize: 13, fontFamily: "inherit", background: "transparent", color: "#111827", width: 160 }}
+            />
+            {buscar && (
+              <button onClick={() => setBuscar("")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "#9CA3AF", padding: 0 }}>✕</button>
+            )}
+          </div>
+        </div>
         <div className="kanban-cols" style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
           <ColKanban
             titulo="Realizó Compra" icon="🛍️" color="#1D4ED8" bg="#EFF6FF" border="#BFDBFE"
