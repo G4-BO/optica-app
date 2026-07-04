@@ -67,7 +67,7 @@ const ESTADOS = {
   RECOGIDO: { label: "Recogido", color: "#6B7280", bg: "#F3F4F6" },
 };
 
-const TIPOS_LENTE = ["Monofocal", "Bifocal", "Multifuncional"];
+const TIPOS_LENTE = ["Monofocal", "Bifocal flapto", "Multifuncional", "Bifocal invisible"];
 const TIPOS_TRATAMIENTO = ["Blancas","Antirreflex","Blue Protec","Fotomatic","Fotoblue","Digital"];
 const METODOS_PAGO = ["Efectivo", "Yape", "Plin", "POS", "Transferencia"];
 const MATERIALES_LUNA = ["Resinas", "Cristal", "Policarbonato", "Resinas NK"];
