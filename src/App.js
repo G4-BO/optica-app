@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import emailjs from '@emailjs/browser';
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, setDoc } from "firebase/firestore";
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, setDoc, getDoc } from "firebase/firestore";
 
 // ─── RESPONSIVE HOOK ────────────────────────────────────────────────
 function useResponsive() {
@@ -535,6 +535,203 @@ function CampanaNotificaciones({ pacientes }) {
         </div>
       )}
       {modalWA && <ModalWhatsAppRenovacion paciente={modalWA} onClose={() => setModalWA(null)} />}
+    </div>
+  );
+}
+
+// ─── LICENCIAS ──────────────────────────────────────────────────────
+const ADMIN_SECRET = "OPTI-ADMIN-2026"; // clave secreta solo tuya
+
+function PantallaLicencia({ onLicenciaValida }) {
+  const [codigo, setCodigo] = useState("");
+  const [error, setError] = useState("");
+  const [cargando, setCargando] = useState(false);
+  const [adminMode, setAdminMode] = useState(false);
+  const [adminClave, setAdminClave] = useState("");
+
+  const verificar = async () => {
+    if (!codigo.trim()) return setError("Ingresa tu código de licencia.");
+    setCargando(true); setError("");
+    try {
+      const ref = doc(db, "licencias", codigo.trim().toUpperCase());
+      const snap = await getDoc(ref);
+      if (!snap.exists()) { setError("Código de licencia inválido."); setCargando(false); return; }
+      const lic = snap.data();
+      if (lic.estado !== "activa") { setError("Esta licencia está suspendida. Contacta a OptiManager."); setCargando(false); return; }
+      const hoy = new Date(); const vence = new Date(lic.vencimiento);
+      if (hoy > vence) { setError("Tu licencia venció el " + lic.vencimiento + ". Contacta a OptiManager para renovar."); setCargando(false); return; }
+      // Guardar en sessionStorage para no pedir cada vez
+      sessionStorage.setItem("licencia", JSON.stringify({ codigo: codigo.trim().toUpperCase(), optica: lic.optica, vencimiento: lic.vencimiento }));
+      onLicenciaValida({ codigo: codigo.trim().toUpperCase(), optica: lic.optica, vencimiento: lic.vencimiento });
+    } catch(e) { setError("Error al verificar. Revisa tu conexión."); }
+    setCargando(false);
+  };
+
+  const diasRestantes = (fecha) => {
+    const diff = new Date(fecha) - new Date();
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  };
+
+  return (
+    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #111827 0%, #1e3a8a 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: "#fff", borderRadius: 24, padding: 40, width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }}>
+        <div style={{ textAlign: "center", marginBottom: 28 }}>
+          <div style={{ background: "#111827", borderRadius: 16, width: 64, height: 64, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto 14px" }}>👁</div>
+          <div style={{ fontSize: 22, fontWeight: 900, color: "#111827", letterSpacing: 1 }}>OPTIMANAGER</div>
+          <div style={{ fontSize: 12, color: "#6B7280", marginTop: 4 }}>Sistema de Gestión Óptica</div>
+          <div style={{ background: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: 10, padding: "8px 14px", marginTop: 14, fontSize: 12, color: "#92400E", fontWeight: 600 }}>🔐 Ingresa tu código de licencia para continuar</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#374151", display: "block", marginBottom: 6 }}>Código de Licencia</label>
+            <input
+              value={codigo} onChange={e => setCodigo(e.target.value.toUpperCase())}
+              onKeyDown={e => e.key === "Enter" && verificar()}
+              placeholder="Ej: OPT-2026-XXXX-XXXX"
+              style={{ width: "100%", border: "1.5px solid #D1D5DB", borderRadius: 10, padding: "11px 14px", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box", letterSpacing: 1, textTransform: "uppercase" }}
+            />
+          </div>
+          {error && <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#DC2626" }}>⚠️ {error}</div>}
+          <button onClick={verificar} disabled={cargando} style={{ background: "#111827", color: "#fff", border: "none", borderRadius: 12, padding: "13px 0", fontSize: 15, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
+            {cargando ? "Verificando..." : "🔓 Activar Sistema"}
+          </button>
+          <div style={{ textAlign: "center", fontSize: 11, color: "#9CA3AF", marginTop: 4 }}>¿No tienes licencia? Contacta a OptiManager</div>
+          <button onClick={() => setAdminMode(!adminMode)} style={{ background: "none", border: "none", color: "#D1D5DB", fontSize: 10, cursor: "pointer", fontFamily: "inherit", marginTop: 8 }}>⚙</button>
+          {adminMode && (
+            <div style={{ display: "flex", gap: 8 }}>
+              <input value={adminClave} onChange={e => setAdminClave(e.target.value)} type="password" placeholder="Clave admin" style={{ flex: 1, border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "8px 12px", fontSize: 13, fontFamily: "inherit", outline: "none" }} />
+              <button onClick={() => { if (adminClave === ADMIN_SECRET) { sessionStorage.setItem("licencia", JSON.stringify({ codigo: "ADMIN", optica: "Admin OptiManager", vencimiento: "2099-12-31", esAdmin: true })); onLicenciaValida({ codigo: "ADMIN", optica: "Admin OptiManager", vencimiento: "2099-12-31", esAdmin: true }); } else setError("Clave incorrecta."); }} style={{ background: "#111827", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>Entrar</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PantallaAdminLicencias({ onVolver }) {
+  const [licencias, setLicencias] = useState([]);
+  const [form, setForm] = useState({ optica: "", tipo: "mensual", meses: 1, notas: "" });
+  const [creando, setCreando] = useState(false);
+  const [licCreada, setLicCreada] = useState(null);
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, "licencias"), snap => {
+      setLicencias(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a, b) => new Date(b.creadaEl) - new Date(a.creadaEl)));
+    });
+    return () => unsub();
+  }, []);
+
+  const generarCodigo = (optica) => {
+    const año = new Date().getFullYear();
+    const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const siglas = optica.replace(/[^A-Z]/gi, "").substring(0, 4).toUpperCase() || "OPTI";
+    return `OPT-${año}-${siglas}-${rand}`;
+  };
+
+  const crearLicencia = async () => {
+    if (!form.optica.trim()) return alert("Ingresa el nombre de la óptica.");
+    setCreando(true);
+    const codigo = generarCodigo(form.optica);
+    const hoy = new Date();
+    const vence = new Date(hoy);
+    vence.setMonth(vence.getMonth() + parseInt(form.meses));
+    const licData = {
+      optica: form.optica.trim(), tipo: form.tipo, estado: "activa",
+      vencimiento: vence.toISOString().split("T")[0],
+      creadaEl: hoy.toISOString().split("T")[0],
+      notas: form.notas, meses: parseInt(form.meses),
+    };
+    await setDoc(doc(db, "licencias", codigo), licData);
+    setLicCreada({ ...licData, codigo });
+    setForm({ optica: "", tipo: "mensual", meses: 1, notas: "" });
+    setCreando(false);
+  };
+
+  const cambiarEstado = async (codigo, nuevoEstado) => {
+    await updateDoc(doc(db, "licencias", codigo), { estado: nuevoEstado });
+  };
+
+  const diasRestantes = (fecha) => Math.ceil((new Date(fecha) - new Date()) / (1000 * 60 * 60 * 24));
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#F3F4F6", fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}>
+      <div style={{ background: "#111827", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ background: "#fff", borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>👁</div>
+          <span style={{ color: "#fff", fontWeight: 800, fontSize: 16 }}>OPTIMANAGER — Panel de Licencias</span>
+        </div>
+        <button onClick={onVolver} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: "7px 14px", color: "#fff", fontSize: 13, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>← Volver</button>
+      </div>
+      <div style={{ maxWidth: 900, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
+
+        {/* CREAR LICENCIA */}
+        <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
+          <div style={{ fontWeight: 800, fontSize: 16, color: "#111827", marginBottom: 18 }}>➕ Nueva Licencia</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: "#374151", display: "block", marginBottom: 5 }}>Nombre de la Óptica *</label>
+              <input value={form.optica} onChange={e => set("optica", e.target.value)} placeholder="Ej: Óptica Central SAC" style={{ width: "100%", border: "1.5px solid #E5E7EB", borderRadius: 10, padding: "10px 13px", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: "#374151", display: "block", marginBottom: 5 }}>Duración</label>
+              <select value={form.meses} onChange={e => set("meses", e.target.value)} style={{ width: "100%", border: "1.5px solid #E5E7EB", borderRadius: 10, padding: "10px 13px", fontSize: 14, fontFamily: "inherit", outline: "none", background: "#FAFAFA" }}>
+                <option value={1}>1 mes</option>
+                <option value={3}>3 meses</option>
+                <option value={6}>6 meses</option>
+                <option value={12}>12 meses (1 año)</option>
+                <option value={120}>Permanente (10 años)</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 12, fontWeight: 700, color: "#374151", display: "block", marginBottom: 5 }}>Notas (opcional)</label>
+              <input value={form.notas} onChange={e => set("notas", e.target.value)} placeholder="Ej: Plan básico, pago mensual" style={{ width: "100%", border: "1.5px solid #E5E7EB", borderRadius: 10, padding: "10px 13px", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+            </div>
+          </div>
+          <button onClick={crearLicencia} disabled={creando} style={{ background: "#111827", color: "#fff", border: "none", borderRadius: 12, padding: "12px 28px", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
+            {creando ? "Generando..." : "🔑 Generar Licencia"}
+          </button>
+          {licCreada && (
+            <div style={{ marginTop: 16, background: "#F0FDF4", border: "2px solid #86EFAC", borderRadius: 14, padding: 18 }}>
+              <div style={{ fontWeight: 800, color: "#059669", fontSize: 14, marginBottom: 8 }}>✅ Licencia creada exitosamente</div>
+              <div style={{ background: "#fff", borderRadius: 10, padding: "12px 16px", fontFamily: "monospace", fontSize: 18, fontWeight: 900, color: "#111827", letterSpacing: 2, textAlign: "center", border: "2px dashed #86EFAC" }}>{licCreada.codigo}</div>
+              <div style={{ fontSize: 12, color: "#6B7280", marginTop: 8, textAlign: "center" }}>Vence: {licCreada.vencimiento} · Óptica: {licCreada.optica}</div>
+              <button onClick={() => { navigator.clipboard.writeText(licCreada.codigo); alert("Código copiado"); }} style={{ width: "100%", marginTop: 10, background: "#059669", color: "#fff", border: "none", borderRadius: 10, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>📋 Copiar Código</button>
+              <button onClick={() => setLicCreada(null)} style={{ width: "100%", marginTop: 6, background: "none", border: "none", color: "#9CA3AF", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Cerrar</button>
+            </div>
+          )}
+        </div>
+
+        {/* LISTA DE LICENCIAS */}
+        <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
+          <div style={{ fontWeight: 800, fontSize: 16, color: "#111827", marginBottom: 18 }}>📋 Licencias ({licencias.length})</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {licencias.length === 0 && <div style={{ textAlign: "center", color: "#9CA3AF", padding: 30 }}>Sin licencias creadas aún</div>}
+            {licencias.map(lic => {
+              const dias = diasRestantes(lic.vencimiento);
+              const activa = lic.estado === "activa";
+              const vencida = dias < 0;
+              const proxVencer = dias >= 0 && dias <= 7;
+              return (
+                <div key={lic.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 12, border: `1.5px solid ${vencida ? "#FECACA" : proxVencer ? "#FDE68A" : activa ? "#BBF7D0" : "#E5E7EB"}`, background: vencida ? "#FEF2F2" : proxVencer ? "#FFFBEB" : activa ? "#F0FDF4" : "#F9FAFB" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 800, fontSize: 14, color: "#111827" }}>{lic.optica}</div>
+                    <div style={{ fontFamily: "monospace", fontSize: 12, color: "#6B7280", letterSpacing: 1 }}>{lic.id}</div>
+                    <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>Vence: {lic.vencimiento} · {vencida ? "⛔ Vencida" : `${dias} días restantes`} {lic.notas && `· ${lic.notas}`}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {activa
+                      ? <button onClick={() => cambiarEstado(lic.id, "suspendida")} style={{ background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>⛔ Suspender</button>
+                      : <button onClick={() => cambiarEstado(lic.id, "activa")} style={{ background: "#F0FDF4", color: "#059669", border: "1px solid #BBF7D0", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>✅ Activar</button>
+                    }
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1749,7 +1946,8 @@ function ModalPersonalizarColores({ temaActual, onAplicar, onClose, generarCombi
 }
 
 export default function OptiManager() {
-  const [pantalla, setPantalla] = useState("login");
+  const [pantalla, setPantalla] = useState("licencia");
+  const [licenciaInfo, setLicenciaInfo] = useState(null);
   const [usuarioActual, setUsuarioActual] = useState(null);
   const [sedeActual, setSedeActual] = useState(SUCURSALES[0]);
   const [usuarios, setUsuarios] = useState([
@@ -1786,6 +1984,16 @@ export default function OptiManager() {
 
   useEffect(() => {
     injectResponsiveStyles();
+    // Check saved license in session
+    const licGuardada = sessionStorage.getItem("licencia");
+    if (licGuardada) {
+      try {
+        const lic = JSON.parse(licGuardada);
+        const hoy = new Date(); const vence = new Date(lic.vencimiento);
+        if (hoy <= vence) { setLicenciaInfo(lic); setPantalla("login"); }
+        else sessionStorage.removeItem("licencia");
+      } catch(e) { sessionStorage.removeItem("licencia"); }
+    }
     const unsubPacientes = onSnapshot(collection(db, "pacientes"), (snap) => { setPacientes(snap.docs.map(d => ({ ...d.data(), id: d.id }))); });
     const unsubMovimientos = onSnapshot(collection(db, "movimientos"), (snap) => { setMovimientos(snap.docs.map(d => ({ ...d.data(), id: d.id }))); });
     const unsubUsuarios = onSnapshot(collection(db, "usuarios"), (snap) => { const fbUsuarios = snap.docs.map(d => ({ ...d.data(), id: d.id })); if (fbUsuarios.length > 0) setUsuarios(prev => { const adminDefault = prev.find(u => u.username === "admin"); return adminDefault ? [adminDefault, ...fbUsuarios] : fbUsuarios; }); });
@@ -1795,7 +2003,7 @@ export default function OptiManager() {
   }, []);
 
   const handleLogin = (usuario, sede) => { setUsuarioActual(usuario); setSedeActual(sede); setPantalla("app"); };
-  const handleLogout = () => { setUsuarioActual(null); setPantalla("login"); setVista("dashboard"); };
+  const handleLogout = () => { setUsuarioActual(null); sessionStorage.removeItem("licencia"); setPantalla("licencia"); setVista("dashboard"); };
   const handleRegistro = async (nuevoUsuario) => { await addDoc(collection(db, "usuarios"), nuevoUsuario); setPantalla("login"); alert("¡Cuenta creada! Ya puedes iniciar sesión."); };
   const updatePaciente = async (updated) => { const { id, ...data } = updated; await updateDoc(doc(db, "pacientes", id), data); };
   const addPaciente = async (nuevo, configImp, atendidoPorNombre) => {
@@ -1821,6 +2029,8 @@ export default function OptiManager() {
   const guardarConfigSucursal = async (data) => { await setDoc(doc(db, "configuracion", sedeActual), data, { merge: true }); };
 
   if (cargando) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", fontSize: 18, color: "#059669" }}>⏳ Cargando OptiManager...</div>;
+  if (pantalla === "licencia") return <PantallaLicencia onLicenciaValida={(lic) => { setLicenciaInfo(lic); if (lic.esAdmin) setPantalla("admin-licencias"); else setPantalla("login"); }} />;
+  if (pantalla === "admin-licencias") return <PantallaAdminLicencias onVolver={() => { sessionStorage.removeItem("licencia"); setPantalla("licencia"); }} />;
   if (pantalla === "login") return <PantallaLogin usuarios={usuarios} onLogin={handleLogin} onIrRegistro={() => setPantalla("registro")} />;
   if (pantalla === "registro") return <PantallaRegistro usuarios={usuarios} onRegistroExitoso={handleRegistro} onVolver={() => setPantalla("login")} />;
 
