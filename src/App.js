@@ -567,11 +567,6 @@ function PantallaLicencia({ onLicenciaValida }) {
     setCargando(false);
   };
 
-  const diasRestantes = (fecha) => {
-    const diff = new Date(fecha) - new Date();
-    return Math.ceil(diff / (1000 * 60 * 60 * 24));
-  };
-
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #111827 0%, #1e3a8a 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ background: "#fff", borderRadius: 24, padding: 40, width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }}>
@@ -1947,7 +1942,7 @@ function ModalPersonalizarColores({ temaActual, onAplicar, onClose, generarCombi
 
 export default function OptiManager() {
   const [pantalla, setPantalla] = useState("licencia");
-  const [licenciaInfo, setLicenciaInfo] = useState(null);
+  const [, setLicenciaInfo] = useState(null);
   const [usuarioActual, setUsuarioActual] = useState(null);
   const [sedeActual, setSedeActual] = useState(SUCURSALES[0]);
   const [usuarios, setUsuarios] = useState([
