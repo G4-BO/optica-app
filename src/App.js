@@ -354,7 +354,17 @@ function CuadroGraduacion({ graduacion, onChange, readOnly = false }) {
   };
   const headerStyle = { fontSize: 11, fontWeight: 700, color: "#6B7280", textAlign: "center", padding: "6px 4px", textTransform: "uppercase", letterSpacing: 0.4 };
   const labelStyle = { fontSize: 12, fontWeight: 700, color: "#374151", padding: "8px 10px", background: "#F3F4F6", borderRadius: 8, whiteSpace: "nowrap" };
-  const cols = ["Esfera", "Cilindro", "Eje", "Adición", "DP"];
+  const formatOnBlur = (k, v) => {
+    if (!v || v === "" || v === "-" || v === "+") return;
+    const num = v.replace(/[^0-9.]/g, "");
+    if (!num) return;
+    if (k.includes("Esfera") || k.includes("Adicion")) {
+      if (!v.startsWith("+") && !v.startsWith("-")) set(k, "+" + num);
+    }
+    if (k.includes("Cilindro")) {
+      if (!v.startsWith("-")) set(k, "-" + num.replace(/^-/, ""));
+    }
+  };
   const keysOD = ["odEsfera", "odCilindro", "odEje", "odAdicion", "odDp"];
   const keysOI = ["oiEsfera", "oiCilindro", "oiEje", "oiAdicion", "oiDp"];
   return (
@@ -376,9 +386,9 @@ function CuadroGraduacion({ graduacion, onChange, readOnly = false }) {
                     ? <div style={{ ...cellStyle, background: "#F9FAFB" }}>{g[k] || "—"}</div>
                     : <input style={cellStyle} value={g[k]} onChange={e => set(k, e.target.value)}
                         inputMode="decimal"
-                        placeholder={k.includes("Adicion") ? "+0.00" : k.includes("Eje") ? "0°" : "0.00"}
+                        placeholder={k.includes("Adicion") ? "+0.00" : k.includes("Eje") ? "0°" : k.includes("Cilindro") ? "-0.00" : "+0.00"}
                         onFocus={e => e.target.style.borderColor = "#1D4ED8"}
-                        onBlur={e => e.target.style.borderColor = "#D1D5DB"}
+                        onBlur={e => { e.target.style.borderColor = "#D1D5DB"; formatOnBlur(k, g[k]); }}
                       />
                   }
                 </td>
