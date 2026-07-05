@@ -354,6 +354,9 @@ function CuadroGraduacion({ graduacion, onChange, readOnly = false }) {
   };
   const headerStyle = { fontSize: 11, fontWeight: 700, color: "#6B7280", textAlign: "center", padding: "6px 4px", textTransform: "uppercase", letterSpacing: 0.4 };
   const labelStyle = { fontSize: 12, fontWeight: 700, color: "#374151", padding: "8px 10px", background: "#F3F4F6", borderRadius: 8, whiteSpace: "nowrap" };
+  const cols = ["Esfera", "Cilindro", "Eje", "Adición", "DP"];
+  const keysOD = ["odEsfera", "odCilindro", "odEje", "odAdicion", "odDp"];
+  const keysOI = ["oiEsfera", "oiCilindro", "oiEje", "oiAdicion", "oiDp"];
   const formatOnBlur = (k, v) => {
     if (!v || v === "" || v === "-" || v === "+") return;
     const num = v.replace(/[^0-9.]/g, "");
@@ -365,8 +368,6 @@ function CuadroGraduacion({ graduacion, onChange, readOnly = false }) {
       if (!v.startsWith("-")) set(k, "-" + num.replace(/^-/, ""));
     }
   };
-  const keysOD = ["odEsfera", "odCilindro", "odEje", "odAdicion", "odDp"];
-  const keysOI = ["oiEsfera", "oiCilindro", "oiEje", "oiAdicion", "oiDp"];
   return (
     <div style={{ overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: "4px" }}>
