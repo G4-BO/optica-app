@@ -1241,11 +1241,7 @@ function Dashboard({ pacientes, sedeActual, onUpdate }) {
            (p.telefono || "").includes(q);
   });
 
-  const ingresosHoy = pacientes.flatMap(p => p.abonos.filter(a => a.fecha === hoy)).reduce((s, a) => s + a.monto, 0);
-  const pendientes = pacientes.filter(p => saldoPendiente(p) > 0 && p.estado !== "RECOGIDO");
-  const totalPendiente = pendientes.reduce((s, p) => s + saldoPendiente(p), 0);
   const listos = filtrados.filter(p => p.estado === "LISTO");
-  const enLab = filtrados.filter(p => p.estado === "EN_LABORATORIO");
   const realizaron = filtrados.filter(p => p.estado === "PEDIDO");
   const entregados = filtrados.filter(p => p.estado === "RECOGIDO");
 
