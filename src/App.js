@@ -560,8 +560,8 @@ function PantallaLicencia({ onLicenciaValida }) {
       if (lic.estado !== "activa") { setError("Esta licencia está suspendida. Contacta a OptiManager."); setCargando(false); return; }
       const hoy = new Date(); const vence = new Date(lic.vencimiento);
       if (hoy > vence) { setError("Tu licencia venció el " + lic.vencimiento + ". Contacta a OptiManager para renovar."); setCargando(false); return; }
-      // Guardar en sessionStorage para no pedir cada vez
-      sessionStorage.setItem("licencia", JSON.stringify({ codigo: codigo.trim().toUpperCase(), optica: lic.optica, vencimiento: lic.vencimiento }));
+      // Guardar en localStorage para no pedir cada vez
+      localStorage.setItem("licencia", JSON.stringify({ codigo: codigo.trim().toUpperCase(), optica: lic.optica, vencimiento: lic.vencimiento }));
       onLicenciaValida({ codigo: codigo.trim().toUpperCase(), optica: lic.optica, vencimiento: lic.vencimiento });
     } catch(e) { setError("Error al verificar. Revisa tu conexión."); }
     setCargando(false);
@@ -595,7 +595,7 @@ function PantallaLicencia({ onLicenciaValida }) {
           {adminMode && (
             <div style={{ display: "flex", gap: 8 }}>
               <input value={adminClave} onChange={e => setAdminClave(e.target.value)} type="password" placeholder="Clave admin" style={{ flex: 1, border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "8px 12px", fontSize: 13, fontFamily: "inherit", outline: "none" }} />
-              <button onClick={() => { if (adminClave === ADMIN_SECRET) { sessionStorage.setItem("licencia", JSON.stringify({ codigo: "ADMIN", optica: "Admin OptiManager", vencimiento: "2099-12-31", esAdmin: true })); onLicenciaValida({ codigo: "ADMIN", optica: "Admin OptiManager", vencimiento: "2099-12-31", esAdmin: true }); } else setError("Clave incorrecta."); }} style={{ background: "#111827", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>Entrar</button>
+              <button onClick={() => { if (adminClave === ADMIN_SECRET) { localStorage.setItem("licencia", JSON.stringify({ codigo: "ADMIN", optica: "Admin OptiManager", vencimiento: "2099-12-31", esAdmin: true })); onLicenciaValida({ codigo: "ADMIN", optica: "Admin OptiManager", vencimiento: "2099-12-31", esAdmin: true }); } else setError("Clave incorrecta."); }} style={{ background: "#111827", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>Entrar</button>
             </div>
           )}
         </div>
@@ -1256,8 +1256,8 @@ function Dashboard({ pacientes, sedeActual, onUpdate }) {
   const porMetodo = METODOS_PAGO.map(m => ({ metodo: m, monto: abonosHoy.filter(a => a.metodo === m).reduce((s, a) => s + a.monto, 0) }));
 
   const HORARIOS = {
-    "Óptica La Huayrona": "Lun–Sáb: 9:00am – 8:00pm / Dom: 10:00am – 6:00pm",
-    "Óptica El Muro":     "Lun–Sáb: 9:00am – 8:00pm / Dom: 10:00am – 6:00pm",
+    "Óptica La Huayrona": "Lun–Sáb: 10:15am – 8:30pm",
+    "Óptica El Muro":     "Lun–Sáb: 10:00am – 9:00pm / Dom: 1:00am – 9:00pm",
   };
 
   const msgListo = (p) => {
@@ -1309,12 +1309,6 @@ function Dashboard({ pacientes, sedeActual, onUpdate }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div className="stat-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14 }}>
-        <StatCard label="Ingresos Hoy" value={fmt(ingresosHoy)} sub="todos los abonos de hoy" color="#1D4ED8" icon="💰" />
-        <StatCard label="Por Cobrar" value={fmt(totalPendiente)} sub={`${pendientes.length} pacientes`} color="#DC2626" icon="📋" />
-        <StatCard label="Listos p/ Entregar" value={listos.length} sub="notificar pacientes" color="#10B981" icon="✅" />
-        <StatCard label="En Laboratorio" value={enLab.length} sub="en proceso" color="#F59E0B" icon="🔬" />
-      </div>
       <Card>
         <div style={{ fontWeight: 700, fontSize: 16, color: "#111827", marginBottom: 2 }}>🏪 {sedeActual}</div>
         <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>Resumen de caja de esta sucursal</div>
@@ -1357,7 +1351,7 @@ function Dashboard({ pacientes, sedeActual, onUpdate }) {
             items={realizaron}
             renderBtn={(p) => (
               <button onClick={() => moverAListo(p)} style={{ display: "flex", alignItems: "center", gap: 6, background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", width: "100%" }}>
-                ✅ Listo — Avisar por WhatsApp
+                📱 Avisar que está listo
               </button>
             )}
           />
@@ -1365,19 +1359,15 @@ function Dashboard({ pacientes, sedeActual, onUpdate }) {
             titulo="Listo para Entregar" icon="✅" color="#059669" bg="#ECFDF5" border="#6EE7B7"
             items={listos}
             renderBtn={(p) => (
-              <button onClick={() => { abrirWA(p, msgListo(p)); moverAEntregado(p); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "#25D366", color: "#fff", border: "none", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", width: "100%" }}>
-                📱 Avisar y Marcar Entregado
+              <button onClick={() => { abrirWA(p, msgEntregado(p)); moverAEntregado(p); }} style={{ display: "flex", alignItems: "center", gap: 6, background: "#25D366", color: "#fff", border: "none", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", width: "100%" }}>
+                💚 Agradecer y Marcar Entregado
               </button>
             )}
           />
           <ColKanban
             titulo="Entregados" icon="🎉" color="#7C3AED" bg="#F5F3FF" border="#C4B5FD"
             items={entregados}
-            renderBtn={(p) => (
-              <button onClick={() => abrirWA(p, msgEntregado(p))} style={{ display: "flex", alignItems: "center", gap: 6, background: "#7C3AED", color: "#fff", border: "none", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                💜 Enviar agradecimiento
-              </button>
-            )}
+            renderBtn={null}
           />
         </div>
       </div>
@@ -1980,14 +1970,14 @@ export default function OptiManager() {
   useEffect(() => {
     injectResponsiveStyles();
     // Check saved license in session
-    const licGuardada = sessionStorage.getItem("licencia");
+    const licGuardada = localStorage.getItem("licencia");
     if (licGuardada) {
       try {
         const lic = JSON.parse(licGuardada);
         const hoy = new Date(); const vence = new Date(lic.vencimiento);
         if (hoy <= vence) { setLicenciaInfo(lic); setPantalla("login"); }
-        else sessionStorage.removeItem("licencia");
-      } catch(e) { sessionStorage.removeItem("licencia"); }
+        else localStorage.removeItem("licencia");
+      } catch(e) { localStorage.removeItem("licencia"); }
     }
     const unsubPacientes = onSnapshot(collection(db, "pacientes"), (snap) => { setPacientes(snap.docs.map(d => ({ ...d.data(), id: d.id }))); });
     const unsubMovimientos = onSnapshot(collection(db, "movimientos"), (snap) => { setMovimientos(snap.docs.map(d => ({ ...d.data(), id: d.id }))); });
@@ -1998,7 +1988,7 @@ export default function OptiManager() {
   }, []);
 
   const handleLogin = (usuario, sede) => { setUsuarioActual(usuario); setSedeActual(sede); setPantalla("app"); };
-  const handleLogout = () => { setUsuarioActual(null); sessionStorage.removeItem("licencia"); setPantalla("licencia"); setVista("dashboard"); };
+  const handleLogout = () => { setUsuarioActual(null); localStorage.removeItem("licencia"); setPantalla("licencia"); setVista("dashboard"); };
   const handleRegistro = async (nuevoUsuario) => { await addDoc(collection(db, "usuarios"), nuevoUsuario); setPantalla("login"); alert("¡Cuenta creada! Ya puedes iniciar sesión."); };
   const updatePaciente = async (updated) => { const { id, ...data } = updated; await updateDoc(doc(db, "pacientes", id), data); };
   const addPaciente = async (nuevo, configImp, atendidoPorNombre) => {
@@ -2025,7 +2015,7 @@ export default function OptiManager() {
 
   if (cargando) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", fontSize: 18, color: "#059669" }}>⏳ Cargando OptiManager...</div>;
   if (pantalla === "licencia") return <PantallaLicencia onLicenciaValida={(lic) => { setLicenciaInfo(lic); if (lic.esAdmin) setPantalla("admin-licencias"); else setPantalla("login"); }} />;
-  if (pantalla === "admin-licencias") return <PantallaAdminLicencias onVolver={() => { sessionStorage.removeItem("licencia"); setPantalla("licencia"); }} />;
+  if (pantalla === "admin-licencias") return <PantallaAdminLicencias onVolver={() => { localStorage.removeItem("licencia"); setPantalla("licencia"); }} />;
   if (pantalla === "login") return <PantallaLogin usuarios={usuarios} onLogin={handleLogin} onIrRegistro={() => setPantalla("registro")} />;
   if (pantalla === "registro") return <PantallaRegistro usuarios={usuarios} onRegistroExitoso={handleRegistro} onVolver={() => setPantalla("login")} />;
 
