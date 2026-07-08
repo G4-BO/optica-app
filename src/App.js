@@ -1252,8 +1252,8 @@ function Dashboard({ pacientes, sedeActual, onUpdate }) {
   const porMetodo = METODOS_PAGO.map(m => ({ metodo: m, monto: abonosHoy.filter(a => a.metodo === m).reduce((s, a) => s + a.monto, 0) }));
 
   const HORARIOS = {
-    "Óptica La Huayrona": "Lun–Sáb: 10:15am – 8:30pm",
-    "Óptica El Muro":     "Lun–Sáb: 10:00am – 9:00pm / Dom: 1:00am – 9:00pm",
+    "OB OPTICAS-SEDE LA HUAYRONA": "Lun–Sáb: 10:15am – 8:30pm",
+    "OB OPTICAS-SEDE EL MURO":     "Lun–Sáb: 10:00am – 9:00pm / Dom: 1:00am – 9:00pm",
   };
 
   const msgListo = (p) => {
