@@ -97,7 +97,6 @@ function imprimirRecibo(p, config, atendidoPor) {
   const abonado = totalAbonado(p);
   const saldo = saldoPendiente(p);
 
-  // Descripción de lunas (sin medida/graduación)
   const descLunas = [
     p.tipoLente === "Monofocal" && p.distanciaMonofocal ? `${p.tipoLente} (${p.distanciaMonofocal})` : p.tipoLente,
     p.tratamiento === "Digital" ? `Digital - ${p.detalleTratamiento || ""}` : p.tratamiento,
@@ -108,57 +107,70 @@ function imprimirRecibo(p, config, atendidoPor) {
   const precioMontura = p.precioMontura || 0;
   const tieneItemsSeparados = precioLunas > 0 || precioMontura > 0;
 
-  // Si no hay precios separados, fallback al modo antiguo
   const filasProductos = tieneItemsSeparados
     ? `
-      ${precioLunas > 0 ? `<tr><td>1</td><td>${descLunas}</td><td class="right">${precioLunas.toFixed(2)}</td><td class="right">${precioLunas.toFixed(2)}</td></tr>` : ""}
-      ${precioMontura > 0 ? `<tr><td>1</td><td>MONTURA ${p.montura ? `${p.montura}` : "OFTÁLMICA"}${precioMontura < (p.precioMonturaBruta||precioMontura) ? ` (Bonificación -${precioMontura.toFixed(4)})` : ""}</td><td class="right">${precioMontura.toFixed(2)}</td><td class="right">${precioMontura.toFixed(2)}</td></tr>` : ""}
+      ${precioLunas > 0 ? `<tr><td class="col-cant">1</td><td class="col-desc">${descLunas}</td><td class="col-precio">${precioLunas.toFixed(2)}</td><td class="col-total">${precioLunas.toFixed(2)}</td></tr>` : ""}
+      ${precioMontura > 0 ? `<tr><td class="col-cant">1</td><td class="col-desc">MONTURA ${p.montura || "OFTÁLMICA"}${precioMontura < (p.precioMonturaBruta || precioMontura) ? ` (Bonificacion -${precioMontura.toFixed(4)})` : ""}</td><td class="col-precio">${precioMontura.toFixed(2)}</td><td class="col-total">${precioMontura.toFixed(2)}</td></tr>` : ""}
     `
-    : `<tr><td>1</td><td>${descLunas}${p.montura ? ` / ${p.montura}` : ""}</td><td class="right">${p.total.toFixed(2)}</td><td class="right">${p.total.toFixed(2)}</td></tr>`;
+    : `<tr><td class="col-cant">1</td><td class="col-desc">${descLunas}${p.montura ? ` / ${p.montura}` : ""}</td><td class="col-precio">${p.total.toFixed(2)}</td><td class="col-total">${p.total.toFixed(2)}</td></tr>`;
 
-  const win = window.open("", "_blank", "width=420,height=640");
+  const win = window.open("", "_blank", "width=420,height=700");
   if (!win) { alert("Tu navegador bloqueó la ventana de impresión. Permite las ventanas emergentes para este sitio e intenta de nuevo."); return; }
-  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Recibo</title>
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${cfg.nombre || "Recibo"}</title>
     <style>
-      * { box-sizing: border-box; }
-      body { font-family: 'Courier New', monospace; font-size: 12px; width: 300px; margin: 0 auto; padding: 14px 8px; color: #000; }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: 'Courier New', Courier, monospace; font-size: 13px; font-weight: 700; width: 302px; margin: 0 auto; padding: 10px 6px; color: #000; -webkit-print-color-adjust: exact; }
       .center { text-align: center; }
-      .bold { font-weight: 700; }
-      .line { border-top: 1px dashed #000; margin: 8px 0; }
-      .row { display: flex; justify-content: space-between; }
-      table { width: 100%; border-collapse: collapse; margin-top: 6px; }
-      th, td { font-size: 11px; padding: 3px 0; text-align: left; vertical-align: top; }
-      .right { text-align: right; }
-      .pre { white-space: pre-line; }
-      @media print { @page { margin: 6mm; } }
+      .bold { font-weight: 900; }
+      .line { border-top: 1.5px dashed #000; margin: 7px 0; }
+      .linea-solida { border-top: 1.5px solid #000; margin: 7px 0; }
+      .row { display: flex; justify-content: space-between; align-items: flex-start; margin: 2px 0; }
+      .nombre-optica { font-size: 16px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; }
+      .sub-optica { font-size: 12px; font-weight: 700; text-transform: uppercase; }
+      .dato { margin: 2px 0; font-size: 12px; font-weight: 700; }
+      .dato strong { font-weight: 900; }
+      table { width: 100%; border-collapse: collapse; margin: 6px 0; }
+      th { font-size: 11px; font-weight: 900; text-transform: uppercase; padding: 3px 2px; border-bottom: 1px solid #000; text-align: left; }
+      td { font-size: 11px; font-weight: 700; padding: 3px 2px; vertical-align: top; text-align: left; }
+      .col-cant { width: 28px; }
+      .col-desc { width: 170px; word-break: break-word; }
+      .col-precio { width: 44px; text-align: right; }
+      .col-total { width: 44px; text-align: right; }
+      .monto { font-size: 13px; font-weight: 900; }
+      .pre { white-space: pre-line; font-size: 11px; font-weight: 700; }
+      @media print {
+        @page { margin: 4mm; size: 80mm auto; }
+        body { padding: 0; }
+      }
     </style></head><body>
-    <div class="center bold" style="font-size:15px;">${cfg.nombre || ""}</div>
-    ${cfg.corporacion ? `<div class="center">${cfg.corporacion}</div>` : ""}
-    ${cfg.direccion ? `<div class="center">${cfg.direccion}</div>` : ""}
-    ${cfg.telefonos ? `<div class="center">TELÉFONOS: ${cfg.telefonos}</div>` : ""}
-    <div class="line"></div>
-    <div>ORDEN N°: ${String(p.ordenNum || 1).padStart(5,"0")}</div>
-    <div>FECHA: ${p.fecha || ""}</div>
-    <div>NOMBRES: ${p.nombre || ""}</div>
-    ${p.dni ? `<div>DNI: ${p.dni}</div>` : ""}
-    ${p.telefono ? `<div>TELÉFONO: ${p.telefono}</div>` : ""}
-    <div>SUCURSAL: ${p.sucursal || ""}</div>
-    ${p.fechaEntrega ? `<div>FECHA DE ENTREGA: ${p.fechaEntrega} ${p.horaEntrega || "19:00"}:00</div>` : ""}
-    <div class="line"></div>
+    <div class="center nombre-optica">${cfg.nombre || ""}</div>
+    ${cfg.corporacion ? `<div class="center sub-optica">${cfg.corporacion}</div>` : ""}
+    ${cfg.direccion ? `<div class="center" style="font-size:11px;font-weight:700;">${cfg.direccion}</div>` : ""}
+    ${cfg.telefonos ? `<div class="center" style="font-size:11px;font-weight:700;">TELEFONOS: ${cfg.telefonos}</div>` : ""}
+    <div class="linea-solida"></div>
+    <div class="dato"><strong>ORDEN DE TRABAJO N°</strong>&nbsp;&nbsp;${String(p.ordenNum || 1).padStart(5,"0")}</div>
+    <div class="dato"><strong>FECHA:</strong> ${p.fecha || ""}</div>
+    <div class="dato"><strong>NOMBRES:</strong> ${(p.nombre || "").toUpperCase()}</div>
+    ${p.dni ? `<div class="dato"><strong>DNI:</strong> ${p.dni}</div>` : ""}
+    ${p.telefono ? `<div class="dato"><strong>TELEFONO:</strong> ${p.telefono} /</div>` : ""}
+    ${p.fechaEntrega ? `<div class="dato"><strong>FECHA DE ENTREGA:</strong> ${p.fechaEntrega} ${p.horaEntrega || "19:00"}:00</div>` : ""}
+    <div class="linea-solida"></div>
     <table>
-      <tr><th>CANT</th><th>DESCRIPCIÓN</th><th class="right">P.VTA</th><th class="right">TOTAL</th></tr>
-      ${filasProductos}
+      <thead><tr><th class="col-cant">CANT</th><th class="col-desc">DESCRIPCION</th><th class="col-precio">P.VTA</th><th class="col-total">TOTAL</th></tr></thead>
+      <tbody>${filasProductos}</tbody>
     </table>
     <div class="line"></div>
-    <div class="row bold"><span>TOTAL:</span><span>${p.total.toFixed(2)}</span></div>
-    <div class="row"><span>A.CTA:</span><span>${abonado.toFixed(2)}</span></div>
-    <div class="row bold"><span>SALDO:</span><span>${saldo.toFixed(2)}</span></div>
-    ${p.observaciones ? `<div class="line"></div><div class="bold">OBSERVACIÓN:</div><div>${p.observaciones}</div>` : ""}
+    <div class="row"><span class="bold">TOTAL:</span><span class="monto">${p.total.toFixed(2)}</span></div>
+    <div class="row"><span class="bold">A.CTA:</span><span class="monto">${abonado.toFixed(2)}</span></div>
+    <div class="row"><span class="bold">SALDO:</span><span class="monto">${saldo.toFixed(2)}</span></div>
+    ${p.observaciones ? `<div class="line"></div><div class="bold">OBSERVACION:</div><div class="dato">${p.observaciones}</div>` : ""}
     <div class="line"></div>
-    <div>VENTA A: ${saldo <= 0 ? "CONTADO" : "CRÉDITO"}</div>
-    ${atendidoPor ? `<div>ATENDIDO POR: ${atendidoPor}</div>` : ""}
+    <div class="dato">CITA</div>
+    <div class="line"></div>
+    <div class="row"><span class="bold">VENTA A:</span><span class="bold">${saldo <= 0 ? "CONTADO" : "CRÉDITO"}</span></div>
+    ${atendidoPor ? `<div class="dato">ATENDIDO POR: ${atendidoPor.toUpperCase()}</div>` : ""}
     ${cfg.recomendaciones ? `<div class="line"></div><div class="bold">RECOMENDACIONES:</div><div class="pre">${cfg.recomendaciones}</div>` : ""}
-    <div class="center" style="margin-top:12px;">¡Gracias por su compra!</div>
+    <div class="center" style="margin-top:10px;font-size:12px;font-weight:900;">¡Gracias por su compra!</div>
     </body></html>`);
   win.document.close();
   win.focus();
