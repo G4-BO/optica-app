@@ -57,7 +57,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-const SUCURSALES = ["OB OPTICAS-SEDE LA HUAYRONA", "OB OPTICAS-SEDE EL MURO"];
+const SUCURSALES = ["Óptica La Huayrona", "Óptica El Muro"];
 const MASTER_PASSWORD = "OPTI2005";
 
 const ESTADOS = {
