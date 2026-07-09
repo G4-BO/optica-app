@@ -1229,7 +1229,56 @@ function ModalDetalle({ paciente, onClose, onUpdate, onEliminar, esJefe, configu
   );
 }
 
-function Dashboard({ pacientes, sedeActual, onUpdate }) {
+function ModalConfigOptica({ sedeActual, sucursales, configuraciones, onSave, onClose }) {
+  const cfg = configuraciones[sedeActual] || {};
+  const [nombre, setNombre] = useState(cfg.nombreOptica || "");
+  const [horario, setHorario] = useState(cfg.horarioWhatsapp || "Lun–Sáb: 9:00am – 8:00pm / Dom: 10:00am – 6:00pm");
+  const [guardando, setGuardando] = useState(false);
+
+  const guardar = async () => {
+    setGuardando(true);
+    await onSave({ nombreOptica: nombre.trim(), horarioWhatsapp: horario.trim() });
+    setGuardando(false);
+    onClose();
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 3000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: "#fff", borderRadius: 20, padding: 28, width: "100%", maxWidth: 440, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: "#111827" }}>🏪 Configurar Óptica</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#9CA3AF" }}>✕</button>
+        </div>
+        <div style={{ fontSize: 12, color: "#6B7280", marginBottom: 16, background: "#F0FDF4", borderRadius: 10, padding: "10px 14px" }}>
+          Configurando: <strong>{sedeActual}</strong>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#374151", display: "block", marginBottom: 6 }}>Nombre de la Óptica (en mensajes WhatsApp)</label>
+            <input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Ej: Óptica Becerra" style={{ width: "100%", border: "1.5px solid #D1D5DB", borderRadius: 10, padding: "10px 13px", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+            <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 4 }}>Este nombre aparecerá en el mensaje que recibe el paciente</div>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: "#374151", display: "block", marginBottom: 6 }}>Horario de atención (en mensajes WhatsApp)</label>
+            <input value={horario} onChange={e => setHorario(e.target.value)} placeholder="Ej: Lun–Sáb: 9am–8pm" style={{ width: "100%", border: "1.5px solid #D1D5DB", borderRadius: 10, padding: "10px 13px", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+          </div>
+          <div style={{ background: "#F8FAFC", borderRadius: 12, padding: 14, fontSize: 12, color: "#374151" }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Vista previa del mensaje:</div>
+            <div style={{ color: "#6B7280", lineHeight: 1.6 }}>
+              "Hola [Paciente] 👋, su lente está listo en <strong>{nombre || "tu óptica"}</strong>. Horarios: {horario}"
+            </div>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 10, marginTop: 22, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ padding: "9px 18px", borderRadius: 10, border: "1.5px solid #E5E7EB", background: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#6B7280", fontFamily: "inherit" }}>Cancelar</button>
+          <button onClick={guardar} disabled={guardando} style={{ padding: "9px 20px", borderRadius: 10, border: "none", background: "#111827", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#fff", fontFamily: "inherit" }}>{guardando ? "Guardando..." : "✓ Guardar"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Dashboard({ pacientes, sedeActual, onUpdate, configuraciones = {} }) {
   const hoy = today();
   const [buscar, setBuscar] = useState("");
 
@@ -1251,18 +1300,20 @@ function Dashboard({ pacientes, sedeActual, onUpdate }) {
   const ICONOS_METODO = { "Efectivo": "💵", "Yape": "📱", "Plin": "💙", "POS": "💳", "Transferencia": "🏦" };
   const porMetodo = METODOS_PAGO.map(m => ({ metodo: m, monto: abonosHoy.filter(a => a.metodo === m).reduce((s, a) => s + a.monto, 0) }));
 
-  const HORARIOS = {
-    "OB OPTICAS-SEDE LA HUAYRONA": "Lun–Sáb: 10:15am – 8:30pm",
-    "OB OPTICAS-SEDE EL MURO":     "Lun–Sáb: 10:00am – 9:00pm / Dom: 1:00am – 9:00pm",
-  };
+  const cfgSede = configuraciones[sedeActual] || {};
+  const nombreOptica = cfgSede.nombreOptica || sedeActual;
 
   const msgListo = (p) => {
-    const horario = HORARIOS[p.sucursal] || "consultar horario";
-    return `Hola ${p.nombre.split(" ")[0]} 👋, le informamos que su trabajo óptico ya está *listo para recoger* 🎉.\n\nPuede pasar a recogerlo en: *${p.sucursal}*\n🕐 Horarios: ${horario}\n\nLo esperamos 😊`;
+    const cfgP = configuraciones[p.sucursal] || {};
+    const nomP = cfgP.nombreOptica || p.sucursal;
+    const horP = cfgP.horarioWhatsapp || "consultar horario";
+    return `Hola ${p.nombre.split(" ")[0]} 👋, le informamos que su trabajo óptico ya está *listo para recoger* 🎉.\n\nPuede pasar a recogerlo en: *${nomP}*\n🕐 Horarios: ${horP}\n\nLo esperamos 😊`;
   };
 
   const msgEntregado = (p) => {
-    return `Hola ${p.nombre.split(" ")[0]} 😊, queríamos agradecerle por confiar en nosotros ✨.\n\nEsperamos que sus lentes sean de su agrado. Recuerde que ante cualquier consulta o ajuste, estamos siempre a su disposición en *${p.sucursal}* 🏪.\n\n¡Gracias por su compra y hasta pronto! 🙏`;
+    const cfgP = configuraciones[p.sucursal] || {};
+    const nomP = cfgP.nombreOptica || p.sucursal;
+    return `Hola ${p.nombre.split(" ")[0]} 😊, queríamos agradecerle por confiar en nosotros ✨.\n\nEsperamos que sus lentes sean de su agrado. Recuerde que ante cualquier consulta o ajuste, estamos siempre a su disposición en *${nomP}* 🏪.\n\n¡Gracias por su compra y hasta pronto! 🙏`;
   };
 
   const abrirWA = (p, msg) => {
@@ -1306,7 +1357,7 @@ function Dashboard({ pacientes, sedeActual, onUpdate }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <Card>
-        <div style={{ fontWeight: 700, fontSize: 16, color: "#111827", marginBottom: 2 }}>🏪 {sedeActual}</div>
+        <div style={{ fontWeight: 700, fontSize: 16, color: "#111827", marginBottom: 2 }}>🏪 {nombreOptica}</div>
         <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>Resumen de caja de esta sucursal</div>
         <div style={{ display: "flex", gap: 28, flexWrap: "wrap", marginBottom: 18 }}>
           <div><div style={{ fontSize: 11, color: "#6B7280" }}>TOTAL RECAUDADO</div><div style={{ fontSize: 22, fontWeight: 800, color: "#1D4ED8" }}>{fmt(totalRecaudadoSede)}</div></div>
@@ -1945,6 +1996,7 @@ export default function OptiManager() {
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [modalColores, setModalColores] = useState(false);
   const [temaActual, setTemaActual] = useState(TEMAS_COLOR[0]);
+  const [modalConfigOptica, setModalConfigOptica] = useState(false);
   const esJefe = (usuarioActual && usuarioActual.rol === "jefe");
   const { isMobile, isTablet } = useResponsive();
   const t = temaActual;
@@ -2025,6 +2077,9 @@ export default function OptiManager() {
   return (
     <div style={{ minHeight: "100vh", background: "#F3F4F6", fontFamily: "'DM Sans', 'Segoe UI', sans-serif", paddingBottom: isMobile ? 64 : 0 }}>
 
+      {/* ── MODAL CONFIG ÓPTICA ── */}
+      {modalConfigOptica && <ModalConfigOptica sedeActual={sedeActual} sucursales={SUCURSALES} configuraciones={configuraciones} onSave={guardarConfigSucursal} onClose={() => setModalConfigOptica(false)} />}
+
       {/* ── OVERLAY ── */}
       {menuAbierto && <div onClick={() => setMenuAbierto(false)} style={{ position: "fixed", inset: 0, zIndex: 150 }} />}
 
@@ -2055,6 +2110,10 @@ export default function OptiManager() {
                   <button onClick={() => { setModalColores(true); setMenuAbierto(false); }} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 18px", background: "transparent", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 500, color: "#374151", fontFamily: "inherit" }}>
                     <span style={{ fontSize: 18 }}>🎨</span> Personalizar Colores
                   </button>
+                  <div style={{ height: 1, background: "#F3F4F6", margin: "2px 12px" }} />
+                  <button onClick={() => { setModalConfigOptica(true); setMenuAbierto(false); }} style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "12px 18px", background: "transparent", border: "none", cursor: "pointer", fontSize: 14, fontWeight: 500, color: "#374151", fontFamily: "inherit" }}>
+                    <span style={{ fontSize: 18 }}>🏪</span> Configurar Óptica
+                  </button>
                 </div>
               </div>
             )}
@@ -2068,9 +2127,9 @@ export default function OptiManager() {
 
           {/* Nav desktop/tablet */}
           {!isMobile && (
-            <nav className="nav-desktop" style={{ display: "flex", gap: 2, flex: 1 }}>
+            <nav className="nav-desktop" style={{ display: "flex", gap: 1, flex: 1 }}>
               {navItems.map(n => (
-                <button key={n.key} onClick={() => setVista(n.key)} style={{ background: vista === n.key ? "rgba(255,255,255,0.2)" : "transparent", color: "#fff", border: "none", borderRadius: 8, padding: "7px 10px", fontWeight: vista === n.key ? 700 : 500, fontSize: 12, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                <button key={n.key} onClick={() => setVista(n.key)} style={{ background: vista === n.key ? "rgba(255,255,255,0.2)" : "transparent", color: "#fff", border: "none", borderRadius: 8, padding: "7px 8px", fontWeight: vista === n.key ? 700 : 500, fontSize: 11, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
                   {n.icon} <span className="nav-label">{n.label}</span>
                 </button>
               ))}
@@ -2078,28 +2137,27 @@ export default function OptiManager() {
           )}
 
           {/* Right side */}
-          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 6 : 10, marginLeft: "auto" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 4 : 6, marginLeft: "auto" }}>
             {!isMobile && (
               <>
-                <div style={{ background: "rgba(255,255,255,0.15)", borderRadius: 8, padding: "5px 10px", fontSize: 11, color: "#fff", fontWeight: 600, whiteSpace: "nowrap" }}>🏪 {sedeActual.replace("Óptica ", "")}</div>
-                <select value={sucursalFiltro} onChange={e => setSucursalFiltro(e.target.value)} style={{ background: "#fff", color: "#111827", border: "none", borderRadius: 8, padding: "6px 8px", fontSize: 11, fontFamily: "inherit", cursor: "pointer" }}>
+                <select value={sucursalFiltro} onChange={e => setSucursalFiltro(e.target.value)} style={{ background: "#fff", color: "#111827", border: "none", borderRadius: 8, padding: "5px 6px", fontSize: 11, fontFamily: "inherit", cursor: "pointer", maxWidth: 130 }}>
                   <option value="Todas">Todas las sedes</option>
-                  {SUCURSALES.map(s => <option key={s} value={s}>{s}</option>)}
+                  {SUCURSALES.map(s => <option key={s} value={s}>{s.replace("Óptica ", "")}</option>)}
                 </select>
               </>
             )}
             <CampanaNotificaciones pacientes={pacientes} />
             {!isMobile && (
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: 8, padding: "5px 8px", fontSize: 11, color: "#fff" }}>{esJefe ? "👑" : "👤"} {usuarioActual ? usuarioActual.username : ""}</div>
-                <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: "6px 8px", color: "#fff", fontSize: 11, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>Salir</button>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <div style={{ background: "rgba(255,255,255,0.2)", borderRadius: 8, padding: "4px 7px", fontSize: 10, color: "#fff" }}>{esJefe ? "👑" : "👤"} {usuarioActual ? usuarioActual.username : ""}</div>
+                <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: "5px 7px", color: "#fff", fontSize: 10, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>Salir</button>
               </div>
             )}
             {isMobile && (
-              <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: "6px 10px", color: "#fff", fontSize: 11, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>Salir</button>
+              <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: "6px 8px", color: "#fff", fontSize: 10, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>Salir</button>
             )}
-            <button onClick={() => setModalConfig(true)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: "6px 8px", color: "#fff", fontSize: 13, cursor: "pointer" }}>⚙️</button>
-            <button onClick={() => setModalNuevo(true)} style={{ background: "#fff", color: t.primario, fontWeight: 800, fontSize: isMobile ? 11 : 12, padding: isMobile ? "6px 10px" : "7px 14px", border: "none", borderRadius: 10, cursor: "pointer", whiteSpace: "nowrap" }}>+ Nuevo</button>
+            <button onClick={() => setModalConfig(true)} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: "5px 7px", color: "#fff", fontSize: 12, cursor: "pointer" }}>⚙️</button>
+            <button onClick={() => setModalNuevo(true)} style={{ background: "#fff", color: t.primario, fontWeight: 800, fontSize: isMobile ? 11 : 12, padding: isMobile ? "6px 10px" : "6px 12px", border: "none", borderRadius: 10, cursor: "pointer", whiteSpace: "nowrap" }}>+ Nuevo</button>
           </div>
         </div>
       </div>
@@ -2127,7 +2185,7 @@ export default function OptiManager() {
 
       {/* ── MAIN CONTENT ── */}
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: isMobile ? "14px 12px" : isTablet ? "18px 16px" : "24px 20px" }}>
-        {vista === "dashboard" && <Dashboard pacientes={pacientes.filter(p => sucursalFiltro === "Todas" || p.sucursal === sucursalFiltro)} sedeActual={sucursalFiltro !== "Todas" ? sucursalFiltro : sedeActual} onUpdate={updatePaciente} />}
+        {vista === "dashboard" && <Dashboard pacientes={pacientes.filter(p => sucursalFiltro === "Todas" || p.sucursal === sucursalFiltro)} sedeActual={sucursalFiltro !== "Todas" ? sucursalFiltro : sedeActual} onUpdate={updatePaciente} configuraciones={configuraciones} />}
         {vista === "pacientes" && <Pacientes pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} sucursalFiltro={sucursalFiltro} esJefe={esJefe} configuraciones={configuraciones} atendidoPor={(usuarioActual ? usuarioActual.nombre || usuarioActual.username : "")} />}
         {vista === "directorio" && <Directorio pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} esJefe={esJefe} configuraciones={configuraciones} atendidoPor={(usuarioActual ? usuarioActual.nombre || usuarioActual.username : "")} />}
         {vista === "cuentas" && <Cuentas pacientes={pacientes} sucursalFiltro={sucursalFiltro} />}
