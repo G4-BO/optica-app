@@ -1265,7 +1265,7 @@ function ModalConfigOptica({ sedeActual, sucursales, configuraciones, onSave, on
           <div style={{ background: "#F8FAFC", borderRadius: 12, padding: 14, fontSize: 12, color: "#374151" }}>
             <div style={{ fontWeight: 700, marginBottom: 6 }}>Vista previa del mensaje:</div>
             <div style={{ color: "#6B7280", lineHeight: 1.6 }}>
-              "Hola [Paciente] 👋, su lente está listo en <strong>{nombre || "tu óptica"}</strong>. Horarios: {horario}"
+              "Hola [Paciente] 👋, su producto optico está listo puede pasar a recoger en <strong>{nombre || "tu óptica"}</strong>. Horarios: {horario}"
             </div>
           </div>
         </div>
