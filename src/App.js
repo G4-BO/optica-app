@@ -621,6 +621,8 @@ function PantallaAdminLicencias({ onVolver }) {
   const [form, setForm] = useState({ optica: "", tipo: "mensual", meses: 1, notas: "" });
   const [creando, setCreando] = useState(false);
   const [licCreada, setLicCreada] = useState(null);
+  const [mesesRenovar, setMesesRenovar] = useState({});
+  const [renovando, setRenovando] = useState(null);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   useEffect(() => {
@@ -661,6 +663,17 @@ function PantallaAdminLicencias({ onVolver }) {
   };
 
   const diasRestantes = (fecha) => Math.ceil((new Date(fecha) - new Date()) / (1000 * 60 * 60 * 24));
+
+  const renovarLicencia = async (lic) => {
+    const meses = parseInt(mesesRenovar[lic.id] || 1);
+    setRenovando(lic.id);
+    // Si ya venció, la nueva fecha se cuenta desde hoy. Si aún está vigente, se suma a partir de su vencimiento actual.
+    const base = new Date(lic.vencimiento) > new Date() ? new Date(lic.vencimiento) : new Date();
+    base.setMonth(base.getMonth() + meses);
+    const nuevoVencimiento = base.toISOString().split("T")[0];
+    await updateDoc(doc(db, "licencias", lic.id), { vencimiento: nuevoVencimiento, estado: "activa" });
+    setRenovando(null);
+  };
 
   return (
     <div style={{ minHeight: "100vh", background: "#F3F4F6", fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}>
@@ -727,7 +740,17 @@ function PantallaAdminLicencias({ onVolver }) {
                     <div style={{ fontFamily: "monospace", fontSize: 12, color: "#6B7280", letterSpacing: 1 }}>{lic.id}</div>
                     <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>Vence: {lic.vencimiento} · {vencida ? "⛔ Vencida" : `${dias} días restantes`} {lic.notas && `· ${lic.notas}`}</div>
                   </div>
-                  <div style={{ display: "flex", gap: 6 }}>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                    <select value={mesesRenovar[lic.id] || 1} onChange={e => setMesesRenovar(m => ({ ...m, [lic.id]: e.target.value }))} style={{ border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "6px 8px", fontSize: 12, fontFamily: "inherit", outline: "none", background: "#FAFAFA", cursor: "pointer" }}>
+                      <option value={1}>+1 mes</option>
+                      <option value={3}>+3 meses</option>
+                      <option value={6}>+6 meses</option>
+                      <option value={12}>+12 meses</option>
+                      <option value={120}>+10 años</option>
+                    </select>
+                    <button onClick={() => renovarLicencia(lic)} disabled={renovando === lic.id} style={{ background: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                      {renovando === lic.id ? "..." : "🔄 Renovar"}
+                    </button>
                     {activa
                       ? <button onClick={() => cambiarEstado(lic.id, "suspendida")} style={{ background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>⛔ Suspender</button>
                       : <button onClick={() => cambiarEstado(lic.id, "activa")} style={{ background: "#F0FDF4", color: "#059669", border: "1px solid #BBF7D0", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>✅ Activar</button>
