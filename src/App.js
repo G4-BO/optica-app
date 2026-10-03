@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import emailjs from '@emailjs/browser';
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, setDoc, getDoc } from "firebase/firestore";
+import { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, setDoc, getDoc, getDocs, query, where, runTransaction } from "firebase/firestore";
+import { getAuth, signInWithEmailAndPassword, signOut } from "firebase/auth";
 
 // ─── RESPONSIVE HOOK ────────────────────────────────────────────────
 function useResponsive() {
@@ -56,9 +56,11 @@ const firebaseConfig = {
 };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
 
-const SUCURSALES = ["Óptica La Huayrona", "Óptica El Muro"];
-const MASTER_PASSWORD = "OPTI2005";
+// Las sucursales se cargan al iniciar sesión desde la licencia de la óptica (licencias/<opticaId>.sucursales).
+// Es un arreglo compartido que se rellena en handleLogin, por eso no se reasigna.
+const SUCURSALES = [];
 
 const ESTADOS = {
   PEDIDO: { label: "Pedido", color: "#F59E0B", bg: "#FEF3C7" },
@@ -246,25 +248,6 @@ const abrirWhatsApp = (paciente, mensaje = null) => {
   const msg = encodeURIComponent(mensaje || generarMensajeWhatsApp(paciente));
   const tel = paciente.telefono.replace(/\D/g, "");
   window.open(`https://wa.me/51${tel}?text=${msg}`, "_blank");
-};
-
-const enviarCodigoEmailJS = async (email, codigo, nombre) => {
-  const SERVICE_ID = "service_2a0y4qv";
-  const TEMPLATE_ID = "template_w7szl9r";
-  const PUBLIC_KEY = "7eQFw8xx2YpkMUULH";
-  try {
-    emailjs.init(PUBLIC_KEY);
-    await emailjs.send(SERVICE_ID, TEMPLATE_ID, {
-      to_email: email,
-      to_name: nombre,
-      verification_code: codigo,
-      message: `Tu código de verificación para OPTIMANAGER es: ${codigo}. Válido por 10 minutos.`,
-    });
-    return true;
-  } catch (error) {
-    console.error("EmailJS error:", error);
-    return false;
-  }
 };
 
 function Badge({ estado }) {
@@ -551,241 +534,48 @@ function CampanaNotificaciones({ pacientes }) {
   );
 }
 
-// ─── LICENCIAS ──────────────────────────────────────────────────────
-const ADMIN_SECRET = "OPTI-ADMIN-2026"; // clave secreta solo tuya
-
-function PantallaLicencia({ onLicenciaValida }) {
-  const [codigo, setCodigo] = useState("");
+// ─── LOGIN (Firebase Authentication) ───────────────────────────────
+// Los usuarios y las licencias se crean con optimanager.js (alta-optica / alta-usuario).
+// La licencia se valida en el servidor (reglas de Firestore); aquí solo se muestra el mensaje.
+function PantallaLogin({ onLogin }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
-  const [adminMode, setAdminMode] = useState(false);
-  const [adminClave, setAdminClave] = useState("");
+  const [sesion, setSesion] = useState(null);
+  const [sede, setSede] = useState("");
 
-  const verificar = async () => {
-    if (!codigo.trim()) return setError("Ingresa tu código de licencia.");
+  const ingresar = async () => {
+    if (!email.trim() || !password) return setError("Ingresa tu correo y tu contraseña.");
     setCargando(true); setError("");
     try {
-      const ref = doc(db, "licencias", codigo.trim().toUpperCase());
-      const snap = await getDoc(ref);
-      if (!snap.exists()) { setError("Código de licencia inválido."); setCargando(false); return; }
-      const lic = snap.data();
-      if (lic.estado !== "activa") { setError("Esta licencia está suspendida. Contacta a OptiManager."); setCargando(false); return; }
-      const hoy = new Date(); const vence = new Date(lic.vencimiento);
-      if (hoy > vence) { setError("Tu licencia venció el " + lic.vencimiento + ". Contacta a OptiManager para renovar."); setCargando(false); return; }
-      // Guardar en localStorage para no pedir cada vez
-      localStorage.setItem("licencia", JSON.stringify({ codigo: codigo.trim().toUpperCase(), optica: lic.optica, vencimiento: lic.vencimiento }));
-      onLicenciaValida({ codigo: codigo.trim().toUpperCase(), optica: lic.optica, vencimiento: lic.vencimiento });
-    } catch(e) { setError("Error al verificar. Revisa tu conexión."); }
+      const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+      const { claims } = await cred.user.getIdTokenResult(true);
+      if (!claims.opticaId) throw new Error("Tu usuario no tiene una óptica asignada. Contacta a OptiManager.");
+      const licSnap = await getDoc(doc(db, "licencias", claims.opticaId));
+      if (!licSnap.exists()) throw new Error("No se encontró la licencia de tu óptica. Contacta a OptiManager.");
+      const lic = licSnap.data();
+      if (lic.estado !== "activa") throw new Error("Esta licencia está suspendida. Contacta a OptiManager.");
+      if (new Date() > new Date(`${lic.vencimiento}T23:59:59-05:00`)) throw new Error(`Tu licencia venció el ${lic.vencimiento}. Contacta a OptiManager para renovar.`);
+      const perfilSnap = await getDoc(doc(db, "usuarios", cred.user.uid));
+      const perfil = perfilSnap.exists() ? perfilSnap.data() : {};
+      const nombre = perfil.nombre || cred.user.displayName || email.split("@")[0];
+      const usuario = { uid: cred.user.uid, email: cred.user.email, nombre, username: nombre, rol: claims.rol === "jefe" ? "jefe" : "trabajador", opticaId: claims.opticaId };
+      const sucursales = Array.isArray(lic.sucursales) && lic.sucursales.length ? lic.sucursales : [lic.optica || "Principal"];
+      const datos = { usuario, licencia: lic, sucursales };
+      if (sucursales.length === 1) { onLogin(datos, sucursales[0]); return; }
+      setSesion(datos); setSede(sucursales[0]);
+    } catch (e) {
+      console.error(e);
+      try { await signOut(auth); } catch (_) {}
+      const c = e && e.code;
+      if (["auth/invalid-credential", "auth/invalid-email", "auth/user-not-found", "auth/wrong-password"].includes(c)) setError("Correo o contraseña incorrectos.");
+      else if (c === "auth/too-many-requests") setError("Demasiados intentos. Espera unos minutos e intenta de nuevo.");
+      else if (c === "auth/network-request-failed") setError("Sin conexión. Revisa tu internet.");
+      else if (c === "permission-denied" || c === "unauthenticated") setError("No tienes acceso. Contacta a OptiManager.");
+      else setError(e && !c && e.message ? e.message : "No se pudo iniciar sesión. Intenta de nuevo.");
+    }
     setCargando(false);
-  };
-
-  return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #111827 0%, #1e3a8a 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ background: "#fff", borderRadius: 24, padding: 40, width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.4)" }}>
-        <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div style={{ background: "#111827", borderRadius: 16, width: 64, height: 64, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, margin: "0 auto 14px" }}>👁</div>
-          <div style={{ fontSize: 22, fontWeight: 900, color: "#111827", letterSpacing: 1 }}>OPTIMANAGER</div>
-          <div style={{ fontSize: 12, color: "#6B7280", marginTop: 4 }}>Sistema de Gestión Óptica</div>
-          <div style={{ background: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: 10, padding: "8px 14px", marginTop: 14, fontSize: 12, color: "#92400E", fontWeight: 600 }}>🔐 Ingresa tu código de licencia para continuar</div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 700, color: "#374151", display: "block", marginBottom: 6 }}>Código de Licencia</label>
-            <input
-              value={codigo} onChange={e => setCodigo(e.target.value.toUpperCase())}
-              onKeyDown={e => e.key === "Enter" && verificar()}
-              placeholder="Ej: OPT-2026-XXXX-XXXX"
-              style={{ width: "100%", border: "1.5px solid #D1D5DB", borderRadius: 10, padding: "11px 14px", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box", letterSpacing: 1, textTransform: "uppercase" }}
-            />
-          </div>
-          {error && <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#DC2626" }}>⚠️ {error}</div>}
-          <button onClick={verificar} disabled={cargando} style={{ background: "#111827", color: "#fff", border: "none", borderRadius: 12, padding: "13px 0", fontSize: 15, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
-            {cargando ? "Verificando..." : "🔓 Activar Sistema"}
-          </button>
-          <div style={{ textAlign: "center", fontSize: 11, color: "#9CA3AF", marginTop: 4 }}>¿No tienes licencia? Contacta a OptiManager</div>
-          <button onClick={() => setAdminMode(!adminMode)} style={{ background: "none", border: "none", color: "#D1D5DB", fontSize: 10, cursor: "pointer", fontFamily: "inherit", marginTop: 8 }}>⚙</button>
-          {adminMode && (
-            <div style={{ display: "flex", gap: 8 }}>
-              <input value={adminClave} onChange={e => setAdminClave(e.target.value)} type="password" placeholder="Clave admin" style={{ flex: 1, border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "8px 12px", fontSize: 13, fontFamily: "inherit", outline: "none" }} />
-              <button onClick={() => { if (adminClave === ADMIN_SECRET) { localStorage.setItem("licencia", JSON.stringify({ codigo: "ADMIN", optica: "Admin OptiManager", vencimiento: "2099-12-31", esAdmin: true })); onLicenciaValida({ codigo: "ADMIN", optica: "Admin OptiManager", vencimiento: "2099-12-31", esAdmin: true }); } else setError("Clave incorrecta."); }} style={{ background: "#111827", color: "#fff", border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 13, cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>Entrar</button>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PantallaAdminLicencias({ onVolver }) {
-  const [licencias, setLicencias] = useState([]);
-  const [form, setForm] = useState({ optica: "", tipo: "mensual", meses: 1, notas: "" });
-  const [creando, setCreando] = useState(false);
-  const [licCreada, setLicCreada] = useState(null);
-  const [mesesRenovar, setMesesRenovar] = useState({});
-  const [renovando, setRenovando] = useState(null);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, "licencias"), snap => {
-      setLicencias(snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a, b) => new Date(b.creadaEl) - new Date(a.creadaEl)));
-    });
-    return () => unsub();
-  }, []);
-
-  const generarCodigo = (optica) => {
-    const año = new Date().getFullYear();
-    const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
-    const siglas = optica.replace(/[^A-Z]/gi, "").substring(0, 4).toUpperCase() || "OPTI";
-    return `OPT-${año}-${siglas}-${rand}`;
-  };
-
-  const crearLicencia = async () => {
-    if (!form.optica.trim()) return alert("Ingresa el nombre de la óptica.");
-    setCreando(true);
-    const codigo = generarCodigo(form.optica);
-    const hoy = new Date();
-    const vence = new Date(hoy);
-    vence.setMonth(vence.getMonth() + parseInt(form.meses));
-    const licData = {
-      optica: form.optica.trim(), tipo: form.tipo, estado: "activa",
-      vencimiento: vence.toISOString().split("T")[0],
-      creadaEl: hoy.toISOString().split("T")[0],
-      notas: form.notas, meses: parseInt(form.meses),
-    };
-    await setDoc(doc(db, "licencias", codigo), licData);
-    setLicCreada({ ...licData, codigo });
-    setForm({ optica: "", tipo: "mensual", meses: 1, notas: "" });
-    setCreando(false);
-  };
-
-  const cambiarEstado = async (codigo, nuevoEstado) => {
-    await updateDoc(doc(db, "licencias", codigo), { estado: nuevoEstado });
-  };
-
-  const diasRestantes = (fecha) => Math.ceil((new Date(fecha) - new Date()) / (1000 * 60 * 60 * 24));
-
-  const renovarLicencia = async (lic) => {
-    const meses = parseInt(mesesRenovar[lic.id] || 1);
-    setRenovando(lic.id);
-    // Si ya venció, la nueva fecha se cuenta desde hoy. Si aún está vigente, se suma a partir de su vencimiento actual.
-    const base = new Date(lic.vencimiento) > new Date() ? new Date(lic.vencimiento) : new Date();
-    base.setMonth(base.getMonth() + meses);
-    const nuevoVencimiento = base.toISOString().split("T")[0];
-    await updateDoc(doc(db, "licencias", lic.id), { vencimiento: nuevoVencimiento, estado: "activa" });
-    setRenovando(null);
-  };
-
-  return (
-    <div style={{ minHeight: "100vh", background: "#F3F4F6", fontFamily: "'DM Sans', 'Segoe UI', sans-serif" }}>
-      <div style={{ background: "#111827", padding: "14px 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ background: "#fff", borderRadius: 8, width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>👁</div>
-          <span style={{ color: "#fff", fontWeight: 800, fontSize: 16 }}>OPTIMANAGER — Panel de Licencias</span>
-        </div>
-        <button onClick={onVolver} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, padding: "7px 14px", color: "#fff", fontSize: 13, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>← Volver</button>
-      </div>
-      <div style={{ maxWidth: 900, margin: "0 auto", padding: 24, display: "flex", flexDirection: "column", gap: 20 }}>
-
-        {/* CREAR LICENCIA */}
-        <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
-          <div style={{ fontWeight: 800, fontSize: 16, color: "#111827", marginBottom: 18 }}>➕ Nueva Licencia</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: "#374151", display: "block", marginBottom: 5 }}>Nombre de la Óptica *</label>
-              <input value={form.optica} onChange={e => set("optica", e.target.value)} placeholder="Ej: Óptica Central SAC" style={{ width: "100%", border: "1.5px solid #E5E7EB", borderRadius: 10, padding: "10px 13px", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
-            </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: "#374151", display: "block", marginBottom: 5 }}>Duración</label>
-              <select value={form.meses} onChange={e => set("meses", e.target.value)} style={{ width: "100%", border: "1.5px solid #E5E7EB", borderRadius: 10, padding: "10px 13px", fontSize: 14, fontFamily: "inherit", outline: "none", background: "#FAFAFA" }}>
-                <option value={1}>1 mes</option>
-                <option value={3}>3 meses</option>
-                <option value={6}>6 meses</option>
-                <option value={12}>12 meses (1 año)</option>
-                <option value={120}>Permanente (10 años)</option>
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize: 12, fontWeight: 700, color: "#374151", display: "block", marginBottom: 5 }}>Notas (opcional)</label>
-              <input value={form.notas} onChange={e => set("notas", e.target.value)} placeholder="Ej: Plan básico, pago mensual" style={{ width: "100%", border: "1.5px solid #E5E7EB", borderRadius: 10, padding: "10px 13px", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
-            </div>
-          </div>
-          <button onClick={crearLicencia} disabled={creando} style={{ background: "#111827", color: "#fff", border: "none", borderRadius: 12, padding: "12px 28px", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
-            {creando ? "Generando..." : "🔑 Generar Licencia"}
-          </button>
-          {licCreada && (
-            <div style={{ marginTop: 16, background: "#F0FDF4", border: "2px solid #86EFAC", borderRadius: 14, padding: 18 }}>
-              <div style={{ fontWeight: 800, color: "#059669", fontSize: 14, marginBottom: 8 }}>✅ Licencia creada exitosamente</div>
-              <div style={{ background: "#fff", borderRadius: 10, padding: "12px 16px", fontFamily: "monospace", fontSize: 18, fontWeight: 900, color: "#111827", letterSpacing: 2, textAlign: "center", border: "2px dashed #86EFAC" }}>{licCreada.codigo}</div>
-              <div style={{ fontSize: 12, color: "#6B7280", marginTop: 8, textAlign: "center" }}>Vence: {licCreada.vencimiento} · Óptica: {licCreada.optica}</div>
-              <button onClick={() => { navigator.clipboard.writeText(licCreada.codigo); alert("Código copiado"); }} style={{ width: "100%", marginTop: 10, background: "#059669", color: "#fff", border: "none", borderRadius: 10, padding: "10px 0", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>📋 Copiar Código</button>
-              <button onClick={() => setLicCreada(null)} style={{ width: "100%", marginTop: 6, background: "none", border: "none", color: "#9CA3AF", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Cerrar</button>
-            </div>
-          )}
-        </div>
-
-        {/* LISTA DE LICENCIAS */}
-        <div style={{ background: "#fff", borderRadius: 16, padding: 24, boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
-          <div style={{ fontWeight: 800, fontSize: 16, color: "#111827", marginBottom: 18 }}>📋 Licencias ({licencias.length})</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {licencias.length === 0 && <div style={{ textAlign: "center", color: "#9CA3AF", padding: 30 }}>Sin licencias creadas aún</div>}
-            {licencias.map(lic => {
-              const dias = diasRestantes(lic.vencimiento);
-              const activa = lic.estado === "activa";
-              const vencida = dias < 0;
-              const proxVencer = dias >= 0 && dias <= 7;
-              return (
-                <div key={lic.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 12, border: `1.5px solid ${vencida ? "#FECACA" : proxVencer ? "#FDE68A" : activa ? "#BBF7D0" : "#E5E7EB"}`, background: vencida ? "#FEF2F2" : proxVencer ? "#FFFBEB" : activa ? "#F0FDF4" : "#F9FAFB" }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 800, fontSize: 14, color: "#111827" }}>{lic.optica}</div>
-                    <div style={{ fontFamily: "monospace", fontSize: 12, color: "#6B7280", letterSpacing: 1 }}>{lic.id}</div>
-                    <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>Vence: {lic.vencimiento} · {vencida ? "⛔ Vencida" : `${dias} días restantes`} {lic.notas && `· ${lic.notas}`}</div>
-                  </div>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                    <select value={mesesRenovar[lic.id] || 1} onChange={e => setMesesRenovar(m => ({ ...m, [lic.id]: e.target.value }))} style={{ border: "1.5px solid #E5E7EB", borderRadius: 8, padding: "6px 8px", fontSize: 12, fontFamily: "inherit", outline: "none", background: "#FAFAFA", cursor: "pointer" }}>
-                      <option value={1}>+1 mes</option>
-                      <option value={3}>+3 meses</option>
-                      <option value={6}>+6 meses</option>
-                      <option value={12}>+12 meses</option>
-                      <option value={120}>+10 años</option>
-                    </select>
-                    <button onClick={() => renovarLicencia(lic)} disabled={renovando === lic.id} style={{ background: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                      {renovando === lic.id ? "..." : "🔄 Renovar"}
-                    </button>
-                    {activa
-                      ? <button onClick={() => cambiarEstado(lic.id, "suspendida")} style={{ background: "#FEF2F2", color: "#DC2626", border: "1px solid #FECACA", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>⛔ Suspender</button>
-                      : <button onClick={() => cambiarEstado(lic.id, "activa")} style={{ background: "#F0FDF4", color: "#059669", border: "1px solid #BBF7D0", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>✅ Activar</button>
-                    }
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PantallaLogin({ usuarios, onLogin, onIrRegistro }) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [sede, setSede] = useState(SUCURSALES[0]);
-  const [error, setError] = useState("");
-
-  const handleLogin = async () => {
-    const uLocal = usuarios.find(u => u.username === username && u.password === password && u.verificado);
-    if (uLocal) { onLogin(uLocal, sede); return; }
-    try {
-      const { getFirestore, collection, getDocs } = await import("firebase/firestore");
-      const { initializeApp, getApps } = await import("firebase/app");
-      const fbApp = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
-      const fbDb = getFirestore(fbApp);
-      const snap = await getDocs(collection(fbDb, "usuarios"));
-      const fbUsuarios = snap.docs.map(d => ({ ...d.data(), id: d.id }));
-      const uFb = fbUsuarios.find(u => u.username === username && u.password === password && u.verificado);
-      if (uFb) { onLogin(uFb, sede); return; }
-    } catch(e) { console.error(e); }
-    setError("Usuario o contraseña incorrectos, o cuenta no verificada.");
   };
 
   return (
@@ -797,130 +587,30 @@ function PantallaLogin({ usuarios, onLogin, onIrRegistro }) {
           <div style={{ fontSize: 13, color: "#6B7280", marginTop: 4 }}>Sistema de Gestión Óptica</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <Input label="Usuario" value={username} onChange={e => setUsername(e.target.value)} placeholder="Tu nombre de usuario" />
-          <Input label="Contraseña" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" />
-          <Select label="Sede de trabajo" value={sede} onChange={e => setSede(e.target.value)} options={SUCURSALES.map(s => ({ value: s, label: s }))} />
-          {error && <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#DC2626" }}>⚠️ {error}</div>}
-          <Btn onClick={handleLogin} style={{ padding: "12px 0", fontSize: 15 }}>Ingresar al Sistema</Btn>
-          <button onClick={onIrRegistro} style={{ background: "none", border: "none", color: "#1D4ED8", fontSize: 13, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline", marginTop: 4 }}>
-            ¿No tienes cuenta? Regístrate aquí
-          </button>
+          {!sesion ? (
+            <>
+              <Input label="Correo" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="tucorreo@ejemplo.com" />
+              <Input label="Contraseña" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••"
+                onKeyDown={e => { if (e.key === "Enter" && !cargando) ingresar(); }} />
+              {error && <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#DC2626" }}>⚠️ {error}</div>}
+              <Btn onClick={ingresar} disabled={cargando} style={{ padding: "12px 0", fontSize: 15 }}>{cargando ? "⏳ Ingresando..." : "Ingresar al Sistema"}</Btn>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 13, color: "#374151", textAlign: "center" }}>Hola, <strong>{sesion.usuario.nombre}</strong></div>
+              <Select label="Sede de trabajo" value={sede} onChange={e => setSede(e.target.value)} options={sesion.sucursales.map(s => ({ value: s, label: s }))} />
+              <Btn onClick={() => onLogin(sesion, sede)} style={{ padding: "12px 0", fontSize: 15 }}>Entrar</Btn>
+              <button onClick={async () => { try { await signOut(auth); } catch (_) {} setSesion(null); setPassword(""); }}
+                style={{ background: "none", border: "none", color: "#6B7280", fontSize: 13, cursor: "pointer", fontFamily: "inherit", textDecoration: "underline" }}>Usar otra cuenta</button>
+            </>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-function PantallaRegistro({ usuarios, onRegistroExitoso, onVolver }) {
-  const [paso, setPaso] = useState(1);
-  const [form, setForm] = useState({ nombre: "", email: "", celular: "", username: "", password: "", confirmar: "", rol: "trabajador", claveJefe: "" });
-  const [codigoGenerado, setCodigoGenerado] = useState("");
-  const [codigoIngresado, setCodigoIngresado] = useState("");
-  const [error, setError] = useState("");
-  const [enviando, setEnviando] = useState(false);
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-
-  const validarFormulario = () => {
-    if (!form.nombre.trim()) return "Ingresa tu nombre completo.";
-    if (!form.email.includes("@")) return "Ingresa un correo válido.";
-    if (form.celular.length < 9) return "Ingresa un número de celular válido.";
-    if (!form.username.trim()) return "Elige un nombre de usuario.";
-    if (form.password.length < 6) return "La contraseña debe tener al menos 6 caracteres.";
-    if (form.password !== form.confirmar) return "Las contraseñas no coinciden.";
-    if (usuarios.find(u => u.username === form.username)) return "Ese nombre de usuario ya existe.";
-    if (usuarios.find(u => u.email === form.email)) return "Ese correo ya está registrado.";
-    if (form.rol === "jefe" && form.claveJefe !== MASTER_PASSWORD) return "Contraseña maestra incorrecta para crear cuenta de Jefe.";
-    return null;
-  };
-
-  const enviarCodigo = async () => {
-    const err = validarFormulario();
-    if (err) { setError(err); return; }
-    setError(""); setEnviando(true);
-    const codigo = Math.floor(100000 + Math.random() * 900000).toString();
-    setCodigoGenerado(codigo);
-    try {
-      const ok = await enviarCodigoEmailJS(form.email, codigo, form.nombre);
-      if (ok) { setPaso(2); }
-      else { setError(`Código de prueba: ${codigo}`); setPaso(2); }
-    } catch { setError(`Código offline: ${codigo}`); setPaso(2); }
-    setEnviando(false);
-  };
-
-  const verificarCodigo = () => {
-    if (codigoIngresado !== codigoGenerado) { setError("Código incorrecto."); return; }
-    onRegistroExitoso({ id: Date.now(), nombre: form.nombre, email: form.email, celular: form.celular, username: form.username, password: form.password, rol: form.rol, verificado: true });
-  };
-
-  return (
-    <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #059669 0%, #065f46 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ background: "#fff", borderRadius: 24, padding: 40, width: "100%", maxWidth: 480, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 28 }}>
-          <button onClick={onVolver} style={{ background: "#F3F4F6", border: "none", borderRadius: 10, padding: "8px 14px", cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 700 }}>← Volver</button>
-          <div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: "#111827" }}>{paso === 1 ? "Crear Cuenta" : "Verificar Email"}</div>
-            <div style={{ fontSize: 12, color: "#6B7280" }}>{paso === 1 ? "Paso 1 de 2" : "Paso 2 de 2"}</div>
-          </div>
-        </div>
-        {paso === 1 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Input label="Nombre completo *" value={form.nombre} onChange={e => set("nombre", e.target.value)} placeholder="Tu nombre" />
-              <Input label="Celular *" value={form.celular} onChange={e => set("celular", e.target.value)} placeholder="9XXXXXXXX" />
-            </div>
-            <Input label="Correo electrónico *" type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="correo@ejemplo.com" />
-            <Input label="Nombre de usuario *" value={form.username} onChange={e => set("username", e.target.value)} placeholder="usuario123" />
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <Input label="Contraseña *" type="password" value={form.password} onChange={e => set("password", e.target.value)} placeholder="Mín. 6 caracteres" />
-              <Input label="Confirmar contraseña *" type="password" value={form.confirmar} onChange={e => set("confirmar", e.target.value)} placeholder="Repetir contraseña" />
-            </div>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 8 }}>Tipo de cuenta *</div>
-              <div style={{ display: "flex", gap: 10 }}>
-                {[{ key: "trabajador", label: "👤 Trabajador", desc: "Acceso estándar" }, { key: "jefe", label: "👑 Jefe", desc: "Acceso completo" }].map(r => (
-                  <button key={r.key} onClick={() => set("rol", r.key)} style={{
-                    flex: 1, padding: "12px 8px", borderRadius: 12, cursor: "pointer",
-                    border: `2px solid ${form.rol === r.key ? (r.key === "jefe" ? "#F59E0B" : "#1D4ED8") : "#E5E7EB"}`,
-                    background: form.rol === r.key ? (r.key === "jefe" ? "#FFFBEB" : "#EFF6FF") : "#fff",
-                    fontFamily: "inherit", textAlign: "center"
-                  }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: form.rol === r.key ? (r.key === "jefe" ? "#92400E" : "#1D4ED8") : "#374151" }}>{r.label}</div>
-                    <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 2 }}>{r.desc}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-            {form.rol === "jefe" && (
-              <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 12, padding: 14 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#92400E", marginBottom: 8 }}>🔐 Contraseña Maestra Requerida</div>
-                <Input label="Contraseña del Jefe" type="password" value={form.claveJefe} onChange={e => set("claveJefe", e.target.value)} placeholder="Solo el jefe la conoce" />
-              </div>
-            )}
-            {error && <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#DC2626" }}>⚠️ {error}</div>}
-            <Btn onClick={enviarCodigo} disabled={enviando} variant="success" style={{ padding: "12px 0", fontSize: 15 }}>
-              {enviando ? "⏳ Enviando código..." : "Continuar → Verificar Email"}
-            </Btn>
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div style={{ background: "#ECFDF5", border: "1px solid #6EE7B7", borderRadius: 12, padding: 16, textAlign: "center" }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>📧</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#065f46" }}>Código enviado a:</div>
-              <div style={{ fontSize: 14, color: "#374151", marginTop: 4 }}>{form.email}</div>
-            </div>
-            <Input label="Código de verificación" value={codigoIngresado} onChange={e => setCodigoIngresado(e.target.value)}
-              placeholder="000000" style={{ textAlign: "center", fontSize: 24, letterSpacing: 8, fontWeight: 800 }} />
-            {error && <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 10, padding: "10px 14px", fontSize: 13, color: "#DC2626" }}>⚠️ {error}</div>}
-            <Btn variant="success" onClick={verificarCodigo} style={{ padding: "12px 0", fontSize: 15 }}>✅ Verificar y Crear Cuenta</Btn>
-            <button onClick={() => setPaso(1)} style={{ background: "none", border: "none", color: "#6B7280", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>← Volver a editar datos</button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [], configuraciones = {}, atendidoPor = "" }) {
+function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [], configuraciones = {}, atendidoPor = "", opticaId = "" }) {
   const [form, setForm] = useState({
     dni: "", nombre: "", apellidos: "", telefono: "",
     sucursal: sucursalActual,
@@ -947,8 +637,31 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [], c
     setBuscandoDni(true); setDniError(""); setDniExito(false); setPacienteExistente(null);
     const existente = pacientes.find(p => p.dni === form.dni);
     if (existente) { setPacienteExistente(existente); setBuscandoDni(false); return; }
+    // Fichas guardadas (incluye pacientes importados desde otro sistema)
+    if (opticaId) {
+      try {
+        const idCliente = `${opticaId}_DNI_${form.dni}`;
+        const cs = await getDoc(doc(db, "clientes", idCliente));
+        if (cs.exists()) {
+          const c = cs.data();
+          let ultimaReceta = "";
+          try {
+            const rs = await getDocs(query(collection(db, "historial_visual"), where("opticaId", "==", opticaId), where("clienteId", "==", idCliente)));
+            const ult = rs.docs.map(d => d.data()).sort((x, y) => (y.fecha || "").localeCompare(x.fecha || ""))[0];
+            if (ult) {
+              const g = ult.graduacion || {};
+              ultimaReceta = `${ult.fecha || "sin fecha"} · OD ${g.odEsfera || "-"} ${g.odCilindro || ""} x${g.odEje || "-"} · OI ${g.oiEsfera || "-"} ${g.oiCilindro || ""} x${g.oiEje || "-"}`;
+            }
+          } catch (_) {}
+          const recompone = c.nombres && `${c.nombres} ${c.apellidos || ""}`.trim() === c.nombre;
+          setPacienteExistente({ dni: form.dni, nombre: c.nombre || "", nombres: recompone ? c.nombres : null, apellidos: recompone ? (c.apellidos || "") : null, telefono: c.telefono || "", ultimaReceta });
+          setBuscandoDni(false); return;
+        }
+      } catch (e) { console.error(e); }
+    }
     try {
-      const res = await fetch(`/api/dni?numero=${form.dni}`);
+      const token = auth.currentUser ? await auth.currentUser.getIdToken() : "";
+      const res = await fetch(`/api/dni?numero=${form.dni}`, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
         const data = await res.json();
        if (data.first_name) {
@@ -981,9 +694,14 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [], c
 
   const cargarPacienteExistente = () => {
     if (!pacienteExistente) return;
-    const partes = pacienteExistente.nombre.split(" ");
-    set("nombre", partes.slice(0, Math.ceil(partes.length/2)).join(" "));
-    set("apellidos", partes.slice(Math.ceil(partes.length/2)).join(" "));
+    if (pacienteExistente.nombres) {
+      set("nombre", pacienteExistente.nombres);
+      set("apellidos", pacienteExistente.apellidos || "");
+    } else {
+      const partes = pacienteExistente.nombre.split(" ");
+      set("nombre", partes.slice(0, Math.ceil(partes.length/2)).join(" "));
+      set("apellidos", partes.slice(Math.ceil(partes.length/2)).join(" "));
+    }
     set("telefono", pacienteExistente.telefono || "");
     setPacienteExistente(null); setDniExito(true);
   };
@@ -999,6 +717,7 @@ function ModalNuevoPaciente({ onClose, onSave, sucursalActual, pacientes = [], c
               El DNI <strong>{pacienteExistente.dni}</strong> ya está registrado como:<br/>
               <strong style={{ color: "#111827" }}>{pacienteExistente.nombre}</strong>
             </p>
+            {pacienteExistente.ultimaReceta && <p style={{ margin: "0 0 16px", textAlign: "center", fontSize: 12, color: "#6B7280" }}>Última receta registrada: {pacienteExistente.ultimaReceta}</p>}
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setPacienteExistente(null)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1.5px solid #E5E7EB", background: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#6B7280" }}>Cancelar</button>
               <button onClick={cargarPacienteExistente} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: "#059669", cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#fff" }}>✅ Cargar Datos</button>
@@ -1658,7 +1377,7 @@ function Movimientos({ movimientos, onAdd, sucursalFiltro }) {
   );
 }
 
-function Reporte({ pacientes, movimientos, sucursalFiltro, esJefe, onAnularVenta, atendidoPor }) {
+function Reporte({ pacientes, movimientos, sucursalFiltro, esJefe, onAnularVenta, atendidoPor, opticaId }) {
   const [fechaReporte, setFechaReporte] = useState(today());
   const [sucursalReporte, setSucursalReporte] = useState(sucursalFiltro !== "Todas" ? sucursalFiltro : SUCURSALES[0]);
   const [anularId, setAnularId] = useState(null);
@@ -1667,7 +1386,7 @@ function Reporte({ pacientes, movimientos, sucursalFiltro, esJefe, onAnularVenta
   const [modalCierre, setModalCierre] = useState(false);
   const [montoApertura, setMontoApertura] = useState("");
   const [montoContado, setMontoContado] = useState("");
-  const idCaja = `${sucursalReporte}_${fechaReporte}`;
+  const idCaja = `${opticaId}__${sucursalReporte}_${fechaReporte}`;
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "cajas", idCaja), (snap) => { setCajaInfo(snap.exists() ? snap.data() : null); });
     return () => unsub();
@@ -1675,7 +1394,7 @@ function Reporte({ pacientes, movimientos, sucursalFiltro, esJefe, onAnularVenta
   const guardarApertura = async () => {
     if (!montoApertura) return alert("Ingresa el monto de apertura.");
     await setDoc(doc(db, "cajas", idCaja), {
-      sucursal: sucursalReporte, fecha: fechaReporte, montoApertura: parseFloat(montoApertura) || 0,
+      opticaId, sucursal: sucursalReporte, fecha: fechaReporte, montoApertura: parseFloat(montoApertura) || 0,
       horaApertura: new Date().toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" }),
       usuarioApertura: atendidoPor || "",
     }, { merge: true });
@@ -1703,7 +1422,7 @@ function Reporte({ pacientes, movimientos, sucursalFiltro, esJefe, onAnularVenta
     if (!montoContado) return alert("Ingresa el monto contado.");
     const diferencia = (parseFloat(montoContado) || 0) - efectivoEsperado;
     await setDoc(doc(db, "cajas", idCaja), {
-      sucursal: sucursalReporte, fecha: fechaReporte,
+      opticaId, sucursal: sucursalReporte, fecha: fechaReporte,
       montoCierre: parseFloat(montoContado) || 0, efectivoEsperado, diferencia,
       horaCierre: new Date().toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" }),
       usuarioCierre: atendidoPor || "",
@@ -2013,13 +1732,11 @@ function ModalPersonalizarColores({ temaActual, onAplicar, onClose, generarCombi
 }
 
 export default function OptiManager() {
-  const [pantalla, setPantalla] = useState("licencia");
+  const [pantalla, setPantalla] = useState("login");
   const [, setLicenciaInfo] = useState(null);
   const [usuarioActual, setUsuarioActual] = useState(null);
-  const [sedeActual, setSedeActual] = useState(SUCURSALES[0]);
-  const [usuarios, setUsuarios] = useState([
-    { id: "admin", nombre: "Administrador", email: "admin@optica.com", celular: "999999999", username: "admin", password: "admin123", rol: "jefe", verificado: true },
-  ]);
+  const [opticaId, setOpticaId] = useState(null);
+  const [sedeActual, setSedeActual] = useState("");
   const [vista, setVista] = useState("dashboard");
   const [pacientes, setPacientes] = useState([]);
   const [sucursalFiltro, setSucursalFiltro] = useState("Todas");
@@ -2050,57 +1767,81 @@ export default function OptiManager() {
     ];
   };
 
-  useEffect(() => {
-    injectResponsiveStyles();
-    // Check saved license in session
-    const licGuardada = localStorage.getItem("licencia");
-    if (licGuardada) {
-      try {
-        const lic = JSON.parse(licGuardada);
-        const hoy = new Date(); const vence = new Date(lic.vencimiento);
-        if (hoy <= vence) { setLicenciaInfo(lic); setPantalla("login"); }
-        else localStorage.removeItem("licencia");
-      } catch(e) { localStorage.removeItem("licencia"); }
-    }
-    const unsubPacientes = onSnapshot(collection(db, "pacientes"), (snap) => { setPacientes(snap.docs.map(d => ({ ...d.data(), id: d.id }))); });
-    const unsubMovimientos = onSnapshot(collection(db, "movimientos"), (snap) => { setMovimientos(snap.docs.map(d => ({ ...d.data(), id: d.id }))); });
-    const unsubUsuarios = onSnapshot(collection(db, "usuarios"), (snap) => { const fbUsuarios = snap.docs.map(d => ({ ...d.data(), id: d.id })); if (fbUsuarios.length > 0) setUsuarios(prev => { const adminDefault = prev.find(u => u.username === "admin"); return adminDefault ? [adminDefault, ...fbUsuarios] : fbUsuarios; }); });
-    const unsubConfig = onSnapshot(collection(db, "configuracion"), (snap) => { const conf = {}; snap.docs.forEach(d => { conf[d.id] = d.data(); }); setConfiguraciones(conf); });
-    setCargando(false);
-    return () => { unsubPacientes(); unsubMovimientos(); unsubUsuarios(); unsubConfig(); };
-  }, []);
+  useEffect(() => { injectResponsiveStyles(); setCargando(false); }, []);
 
-  const handleLogin = (usuario, sede) => { setUsuarioActual(usuario); setSedeActual(sede); setPantalla("app"); };
-  const handleLogout = () => { setUsuarioActual(null); localStorage.removeItem("licencia"); setPantalla("licencia"); setVista("dashboard"); };
-  const handleRegistro = async (nuevoUsuario) => { await addDoc(collection(db, "usuarios"), nuevoUsuario); setPantalla("login"); alert("¡Cuenta creada! Ya puedes iniciar sesión."); };
+  // Datos de la óptica: solo se leen los documentos con su opticaId (las reglas de Firestore lo exigen)
+  useEffect(() => {
+    if (!opticaId) return;
+    const q = (col) => query(collection(db, col), where("opticaId", "==", opticaId));
+    let avisado = false;
+    const alFallar = (err) => {
+      console.error(err);
+      if (err && err.code === "permission-denied" && !avisado) {
+        avisado = true;
+        alert("Tu sesión o tu licencia ya no es válida. Vuelve a ingresar.");
+        handleLogout();
+      }
+    };
+    const unsubs = [
+      onSnapshot(q("pacientes"), (snap) => { setPacientes(snap.docs.map(d => ({ ...d.data(), id: d.id }))); }, alFallar),
+      onSnapshot(q("movimientos"), (snap) => { setMovimientos(snap.docs.map(d => ({ ...d.data(), id: d.id }))); }, alFallar),
+      onSnapshot(q("configuracion"), (snap) => { const conf = {}; snap.docs.forEach(d => { conf[d.data().sucursal || d.id] = d.data(); }); setConfiguraciones(conf); }, alFallar),
+    ];
+    return () => unsubs.forEach(u => u());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opticaId]);
+
+  const handleLogin = ({ usuario, licencia, sucursales }, sede) => {
+    SUCURSALES.splice(0, SUCURSALES.length, ...sucursales);
+    setLicenciaInfo(licencia); setUsuarioActual(usuario); setOpticaId(usuario.opticaId);
+    setSedeActual(sede); setPantalla("app");
+  };
+  const handleLogout = async () => {
+    try { await signOut(auth); } catch (_) {}
+    SUCURSALES.length = 0;
+    setPacientes([]); setMovimientos([]); setConfiguraciones({});
+    setUsuarioActual(null); setOpticaId(null); setLicenciaInfo(null);
+    setSucursalFiltro("Todas"); setVista("dashboard"); setPantalla("login");
+  };
   const updatePaciente = async (updated) => { const { id, ...data } = updated; await updateDoc(doc(db, "pacientes", id), data); };
+  // Ficha del paciente + historial de graduación. Si falla, no bloquea la venta.
+  const guardarFichaPaciente = async (p) => {
+    if (!/^\d{8}$/.test(p.dni || "")) return;
+    const idCliente = `${opticaId}_DNI_${p.dni}`;
+    await setDoc(doc(db, "clientes", idCliente), { opticaId, tipoDoc: "DNI", dni: p.dni, nombre: p.nombre, telefono: p.telefono || "", actualizadoEl: new Date().toISOString() }, { merge: true });
+    const g = p.graduacion || {};
+    if (Object.values(g).some(v => v !== "" && v != null)) {
+      await addDoc(collection(db, "historial_visual"), { opticaId, clienteId: idCliente, tipoDoc: "DNI", dni: p.dni, fecha: p.fecha, graduacion: g, creadoEl: new Date().toISOString() });
+    }
+  };
   const addPaciente = async (nuevo, configImp, atendidoPorNombre) => {
-    // Correlativo por sucursal
-    const contadorRef = doc(db, "contadores", nuevo.sucursal);
+    // Correlativo por sucursal (con transacción: dos trabajadores no obtienen el mismo número)
+    const contadorRef = doc(db, "contadores", `${opticaId}__${nuevo.sucursal}`);
     let ordenNum = 1;
     try {
-      const { getDoc } = await import("firebase/firestore");
-      const snap = await getDoc(contadorRef);
-      ordenNum = snap.exists() ? (snap.data().ultimo || 0) + 1 : 1;
-      await setDoc(contadorRef, { ultimo: ordenNum }, { merge: true });
+      ordenNum = await runTransaction(db, async (tx) => {
+        const snap = await tx.get(contadorRef);
+        const n = (snap.exists() ? (snap.data().ultimo || 0) : 0) + 1;
+        tx.set(contadorRef, { ultimo: n, opticaId, sucursal: nuevo.sucursal }, { merge: true });
+        return n;
+      });
     } catch(e) { console.error("Error correlativo:", e); }
-    const nuevoConOrden = { ...nuevo, ordenNum };
+    const nuevoConOrden = { ...nuevo, ordenNum, opticaId };
     const docRef = await addDoc(collection(db, "pacientes"), nuevoConOrden);
     const pacienteGuardado = { ...nuevoConOrden, id: docRef.id };
+    try { await guardarFichaPaciente(nuevoConOrden); } catch (e) { console.error("Error guardando ficha:", e); }
     setVista("pacientes");
     // Imprimir recibo automáticamente
     setTimeout(() => imprimirRecibo(pacienteGuardado, configImp, atendidoPorNombre), 300);
   };
-  const eliminarPaciente = async (id) => { await deleteDoc(doc(db, "pacientes", id)); };
-  const anularVenta = async (id) => { await deleteDoc(doc(db, "pacientes", id)); };
-  const addMovimiento = async (mov) => { await addDoc(collection(db, "movimientos"), { ...mov, id: Date.now() }); };
-  const guardarConfigSucursal = async (data) => { await setDoc(doc(db, "configuracion", sedeActual), data, { merge: true }); };
+  // Solo el jefe puede eliminar pacientes y anular ventas (también lo exigen las reglas de Firestore)
+  const eliminarPaciente = async (id) => { if (!esJefe) return alert("Solo el jefe puede eliminar pacientes."); await deleteDoc(doc(db, "pacientes", id)); };
+  const anularVenta = async (id) => { if (!esJefe) return alert("Solo el jefe puede anular ventas."); await deleteDoc(doc(db, "pacientes", id)); };
+  const addMovimiento = async (mov) => { await addDoc(collection(db, "movimientos"), { ...mov, id: Date.now(), opticaId }); };
+  const guardarConfigSucursal = async (data) => { await setDoc(doc(db, "configuracion", `${opticaId}__${sedeActual}`), { ...data, opticaId, sucursal: sedeActual }, { merge: true }); };
 
   if (cargando) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", fontSize: 18, color: "#059669" }}>⏳ Cargando OptiManager...</div>;
-  if (pantalla === "licencia") return <PantallaLicencia onLicenciaValida={(lic) => { setLicenciaInfo(lic); if (lic.esAdmin) setPantalla("admin-licencias"); else setPantalla("login"); }} />;
-  if (pantalla === "admin-licencias") return <PantallaAdminLicencias onVolver={() => { localStorage.removeItem("licencia"); setPantalla("licencia"); }} />;
-  if (pantalla === "login") return <PantallaLogin usuarios={usuarios} onLogin={handleLogin} onIrRegistro={() => setPantalla("registro")} />;
-  if (pantalla === "registro") return <PantallaRegistro usuarios={usuarios} onRegistroExitoso={handleRegistro} onVolver={() => setPantalla("login")} />;
+  if (pantalla === "login" || !usuarioActual) return <PantallaLogin onLogin={handleLogin} />;
 
   const navItems = [
     { key: "dashboard", label: "Dashboard", icon: "📊" },
@@ -2225,9 +1966,9 @@ export default function OptiManager() {
         {vista === "directorio" && <Directorio pacientes={pacientes} onUpdate={updatePaciente} onEliminar={eliminarPaciente} esJefe={esJefe} configuraciones={configuraciones} atendidoPor={(usuarioActual ? usuarioActual.nombre || usuarioActual.username : "")} />}
         {vista === "cuentas" && <Cuentas pacientes={pacientes} sucursalFiltro={sucursalFiltro} />}
         {vista === "movimientos" && <Movimientos movimientos={movimientos} onAdd={addMovimiento} sucursalFiltro={sucursalFiltro} />}
-        {vista === "reporte" && <Reporte pacientes={pacientes.filter(p => sucursalFiltro === "Todas" || p.sucursal === sucursalFiltro)} movimientos={movimientos} sucursalFiltro={sucursalFiltro} esJefe={esJefe} onAnularVenta={anularVenta} atendidoPor={(usuarioActual ? usuarioActual.nombre || usuarioActual.username : "")} />}
+        {vista === "reporte" && <Reporte pacientes={pacientes.filter(p => sucursalFiltro === "Todas" || p.sucursal === sucursalFiltro)} movimientos={movimientos} sucursalFiltro={sucursalFiltro} esJefe={esJefe} onAnularVenta={anularVenta} opticaId={opticaId} atendidoPor={(usuarioActual ? usuarioActual.nombre || usuarioActual.username : "")} />}
       </div>
-      {modalNuevo && <ModalNuevoPaciente onClose={() => setModalNuevo(false)} onSave={addPaciente} sucursalActual={sedeActual} pacientes={pacientes} configuraciones={configuraciones} atendidoPor={(usuarioActual ? usuarioActual.nombre || usuarioActual.username : "")} />}
+      {modalNuevo && <ModalNuevoPaciente onClose={() => setModalNuevo(false)} onSave={addPaciente} sucursalActual={sedeActual} opticaId={opticaId} pacientes={pacientes} configuraciones={configuraciones} atendidoPor={(usuarioActual ? usuarioActual.nombre || usuarioActual.username : "")} />}
       {modalConfig && <ModalConfiguracionImpresion sucursal={sedeActual} config={configuraciones[sedeActual]} onSave={guardarConfigSucursal} onClose={() => setModalConfig(false)} />}
     </div>
   );
