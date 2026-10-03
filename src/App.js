@@ -47,12 +47,13 @@ function injectResponsiveStyles() {
 
 // ─── FIREBASE CONFIG ────────────────────────────────────────────────
 const firebaseConfig = {
-  apiKey: "AIzaSyAYZI76vPTa3vSVjdqFGkTyl_4hTjY2SoM",
-  authDomain: "optimanager-6c839.firebaseapp.com",
-  projectId: "optimanager-6c839",
-  storageBucket: "optimanager-6c839.firebasestorage.app",
-  messagingSenderId: "555610836819",
-  appId: "1:555610836819:web:2858bc53ba49a81d199ba6"
+  apiKey: "AIzaSyBNpnfCz3scocIsWLAgTuG6DTPe4E2GyAk",
+  authDomain: "prueba-65743.firebaseapp.com",
+  projectId: "prueba-65743",
+  storageBucket: "prueba-65743.firebasestorage.app",
+  messagingSenderId: "964063193431",
+  appId: "1:964063193431:web:c9570825d514831e03b612",
+  measurementId: "G-BHXS0CYFMR"
 };
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
@@ -1972,4 +1973,4 @@ export default function OptiManager() {
       {modalConfig && <ModalConfiguracionImpresion sucursal={sedeActual} config={configuraciones[sedeActual]} onSave={guardarConfigSucursal} onClose={() => setModalConfig(false)} />}
     </div>
   );
-}
+}6
